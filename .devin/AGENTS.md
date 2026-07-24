@@ -9,13 +9,15 @@
 ## Inventory
 
 ### Rules
-(none yet)
+- `update-docs` (model_decision) — met a jour progress.md, docs/index.md, AGENTS.md quand un milestone est complete ou en fin de session
+- `definition-of-done` (model_decision) — criteres pour marquer un milestone comme termine
+- `test-with-code` (model_decision) — exige un test par module avant de passer au milestone suivant
 
 ### Skills
 - `cascade-self-config` (global skill, project references in `.devin/skills/cascade-self-config/references/`)
 
 ### Workflows
-(none yet)
+- `/end-session` — protocole de handoff en fin de session
 
 ## Development Commands
 
