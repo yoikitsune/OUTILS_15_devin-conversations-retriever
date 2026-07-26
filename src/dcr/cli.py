@@ -15,11 +15,22 @@ import argparse
 import datetime
 import html as html_mod
 import sys
+from datetime import datetime as dt
 from pathlib import Path
 from typing import Any, Sequence
 
 from dcr.indexer import DEFAULT_DB_PATH, Indexer
 from dcr.search import SearchEngine
+
+
+def _parse_date(s: str) -> float:
+    """Parse a date string (YYYY-MM-DD or YYYY-MM-DD HH:MM) to Unix timestamp."""
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return dt.strptime(s, fmt).timestamp()
+        except ValueError:
+            continue
+    raise argparse.ArgumentTypeError(f"Invalid date format: '{s}'. Use YYYY-MM-DD or YYYY-MM-DD HH:MM")
 
 
 # --- Helpers ---
@@ -76,6 +87,8 @@ def cmd_search(args: argparse.Namespace) -> int:
         query=args.query,
         limit=args.limit,
         project=args.project,
+        date_from=args.date_from,
+        date_to=args.date_to,
         source_table=args.source,
     )
     engine.close()
@@ -352,7 +365,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_search = subparsers.add_parser("search", help="Full-text search conversations")
     p_search.add_argument("query", help="Search query")
     p_search.add_argument("-l", "--limit", type=int, default=20, help="Max results (default: 20)")
-    p_search.add_argument("-p", "--project", default=None, help="Filter by project path")
+    p_search.add_argument("-p", "--project", default=None, help="Filter by project path (exact or prefix)")
+    p_search.add_argument("--date-from", dest="date_from", type=_parse_date, default=None,
+                          help="Only conversations created after this date (YYYY-MM-DD)")
+    p_search.add_argument("--date-to", dest="date_to", type=_parse_date, default=None,
+                          help="Only conversations created before this date (YYYY-MM-DD)")
     p_search.add_argument("-s", "--source", default=None, choices=["rounds", "steps", "checkpoints"],
                           help="Restrict search to one table")
     p_search.add_argument("--no-sync", action="store_true", help="Skip auto-sync before search")

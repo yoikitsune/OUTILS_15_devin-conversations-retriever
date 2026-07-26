@@ -152,6 +152,28 @@ def test_cli_search_with_project_filter(db_path: Path, capsys: pytest.CaptureFix
     assert "Found" in out
 
 
+def test_cli_search_with_date_from(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """search with --date-from filter (future date = no results)."""
+    ret = main(["--db", str(db_path), "search", "protobuf", "--date-from", "2099-01-01", "--no-sync"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "No results" in out
+
+
+def test_cli_search_with_date_to(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """search with --date-to filter (past date = no results)."""
+    ret = main(["--db", str(db_path), "search", "protobuf", "--date-to", "2000-01-01", "--no-sync"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "No results" in out
+
+
+def test_cli_search_invalid_date(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """search with invalid date format returns error."""
+    with pytest.raises(SystemExit):
+        main(["--db", str(db_path), "search", "protobuf", "--date-from", "not-a-date", "--no-sync"])
+
+
 def test_cli_search_source_filter(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """search with source table filter."""
     ret = main(["--db", str(db_path), "search", "protobuf", "-s", "steps", "--no-sync"])
