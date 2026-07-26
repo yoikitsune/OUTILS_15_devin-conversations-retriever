@@ -1,6 +1,6 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-26
+> Last updated: 2026-07-26 (export command)
 
 ## Project
 
@@ -28,7 +28,7 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 | [`/src/dcr/parser.py`](../src/dcr/parser.py) | Protobuf wire-format parsing | Completed (M3) |
 | [`/src/dcr/indexer.py`](../src/dcr/indexer.py) | SQLite + FTS5 indexing with sync() | Completed (M4) |
 | [`/src/dcr/search.py`](../src/dcr/search.py) | FTS5 search engine with filters and auto-sync | Completed (M5) |
-| [`/src/dcr/cli.py`](../src/dcr/cli.py) | CLI interface (`dcr`) with 6 subcommands | Completed (M6) |
+| [`/src/dcr/cli.py`](../src/dcr/cli.py) | CLI interface (`dcr`) with 7 subcommands | Completed (M6) |
 | [`/src/dcr/server.py`](../src/dcr/server.py) | MCP server (FastMCP) | Deferred (M7) |
 
 ## Decision Records
@@ -42,7 +42,7 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 ## Verification
 
 ```bash
-# Run all tests (106 tests)
+# Run all tests (114 tests)
 .venv/bin/pytest tests/ -v
 
 # CLI usage
@@ -51,5 +51,6 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 .venv/bin/dcr list -l 5  # List 5 most recent conversations
 .venv/bin/dcr search "protobuf"  # Full-text search
 .venv/bin/dcr show 04a36d38       # Show conversation (prefix OK)
+.venv/bin/dcr export 04a36d38     # Export conversation as markdown
 .venv/bin/dcr html                # Generate HTML overview
 ```

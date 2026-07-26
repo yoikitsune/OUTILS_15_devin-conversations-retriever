@@ -49,12 +49,14 @@ python3 -m venv .venv
 │       ├── parser.py      # Protobuf parsing (CortexTrajectory)
 │       ├── indexer.py     # SQLite + FTS5 indexing
 │       ├── search.py      # Search engine
+│       ├── cli.py        # CLI interface (dcr)
 │       └── models.py      # Pydantic models
 ├── tests/
 │   ├── test_decrypt.py
 │   ├── test_parser.py
 │   ├── test_indexer.py
-│   └── test_search.py
+│   ├── test_search.py
+│   └── test_cli.py
 └── artifacts/             # Decrypted/exported files (gitignored)
 ```
 

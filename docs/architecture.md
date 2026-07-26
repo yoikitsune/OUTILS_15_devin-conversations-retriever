@@ -1,6 +1,6 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-26
+> Last updated: 2026-07-26 (export command added)
 
 ## Overview
 
@@ -111,6 +111,7 @@
   - `dcr search <query>` — Full-text search with `-p/--project`, `-s/--source`, `-l/--limit` filters
   - `dcr list` — List conversations with `-l/--limit`, `--no-sync`
   - `dcr show <cascade_id>` — Show conversation details (supports ID prefix)
+  - `dcr export <cascade_id>` — Export conversation as structured markdown (rounds → steps with full content, checkpoints). Supports `-o/--output` for file output and ID prefix.
   - `dcr status` — Database statistics
   - `dcr html` — Generate sortable HTML overview (`-o/--output`), date columns use `data-sort` attribute with Unix timestamp for correct numeric sorting
 - **Auto-sync**: Enabled by default for `search`, `list`, `html` (disable with `--no-sync`)
@@ -134,6 +135,7 @@
 2. **On `dcr search`**: Auto-sync → FTS5 query across rounds/steps/checkpoints → ranked results with snippets
 3. **On `dcr show`**: Fetch conversation from SQLite → display metadata, rounds, steps, checkpoints
 4. **On `dcr html`**: Auto-sync → generate sortable HTML table of all conversations
+5. **On `dcr export`**: Fetch conversation from SQLite → output structured markdown with rounds, steps (full content text), and checkpoints to stdout or file
 
 ## Dependencies
 

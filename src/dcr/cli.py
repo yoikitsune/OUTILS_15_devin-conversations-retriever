@@ -5,6 +5,7 @@ Subcommands:
   search   — Full-text search conversations
   list     — List indexed conversations
   show     — Show a specific conversation
+  export   — Export a conversation as structured markdown
   status   — Show database status
   html     — Generate HTML overview
 """
@@ -20,7 +21,23 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from dcr.indexer import DEFAULT_DB_PATH, Indexer
+from dcr.parser import (
+    VARIANT_USER_INPUT,
+    VARIANT_PLANNER_RESPONSE,
+    VARIANT_RUN_COMMAND,
+    VARIANT_CHECKPOINT,
+    VARIANT_COMMAND_RESULT,
+)
 from dcr.search import SearchEngine
+
+
+_VARIANT_LABELS: dict[int, str] = {
+    VARIANT_USER_INPUT: "user_input",
+    VARIANT_PLANNER_RESPONSE: "planner_response",
+    VARIANT_RUN_COMMAND: "run_command",
+    VARIANT_CHECKPOINT: "checkpoint",
+    VARIANT_COMMAND_RESULT: "command_result",
+}
 
 
 def _parse_date(s: str) -> float:
@@ -209,6 +226,154 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    """Export a conversation as structured markdown."""
+    idx = Indexer(db_path=args.db_path)
+    conv = idx.get_conversation(args.cascade_id)
+    idx.close()
+
+    if conv is None:
+        print(f"Conversation '{args.cascade_id}' not found.")
+        return 1
+
+    lines: list[str] = []
+
+    def _add(text: str = "") -> None:
+        lines.append(text)
+
+    # Header
+    _add(f"# {conv['title'] or conv['cascade_id']}")
+    _add()
+    _add(f"- **Cascade ID**: `{conv['cascade_id']}`")
+    _add(f"- **Project**: {conv['project_path'] or '—'}")
+    _add(f"- **Branch**: {conv['git_branch'] or '—'}")
+    _add(f"- **Model**: {conv['model'] or '—'}")
+    _add(f"- **Created**: {_fmt_ts(conv['created_at'])}")
+    _add(f"- **Updated**: {_fmt_ts(conv['updated_at'])}")
+    _add(f"- **Steps**: {conv['step_count']} | **Rounds**: {conv['round_count']} | **Checkpoints**: {conv['checkpoint_count']}")
+    _add()
+    _add("---")
+    _add()
+
+    # Build step lookup
+    steps_by_index = {s["step_index"]: s for s in conv.get("steps", [])}
+
+    # Rounds with their steps
+    rounds = conv.get("rounds", [])
+    if rounds:
+        for rnd in rounds:
+            _add(f"## Round {rnd['round_number']}")
+            _add()
+            prompt = (rnd["prompt"] or "").strip()
+            if prompt:
+                _add(f"**User prompt:**")
+                _add()
+                _add(prompt)
+                _add()
+
+            start = rnd["start_step"]
+            end = rnd["end_step"]
+            round_steps = [
+                steps_by_index[i]
+                for i in range(start, end + 1)
+                if i in steps_by_index
+            ]
+
+            if round_steps:
+                for s in round_steps:
+                    vlabel = _VARIANT_LABELS.get(s["variant_field"], f"variant_{s['variant_field']}")
+                    ts = _fmt_ts(s["timestamp"]) if s.get("timestamp") else ""
+                    model = s.get("model") or ""
+                    meta_parts = [f"step {s['step_index']}", vlabel]
+                    if ts:
+                        meta_parts.append(ts)
+                    if model:
+                        meta_parts.append(model)
+                    _add(f"### {' | '.join(meta_parts)}")
+                    _add()
+                    text = (s["content_text"] or "").strip()
+                    if text:
+                        _add("```")
+                        _add(text)
+                        _add("```")
+                    else:
+                        _add("*(empty)*")
+                    _add()
+    else:
+        # No rounds — just dump all steps
+        _add("## Steps")
+        _add()
+        for s in conv.get("steps", []):
+            vlabel = _VARIANT_LABELS.get(s["variant_field"], f"variant_{s['variant_field']}")
+            ts = _fmt_ts(s["timestamp"]) if s.get("timestamp") else ""
+            model = s.get("model") or ""
+            meta_parts = [f"step {s['step_index']}", vlabel]
+            if ts:
+                meta_parts.append(ts)
+            if model:
+                meta_parts.append(model)
+            _add(f"### {' | '.join(meta_parts)}")
+            _add()
+            text = (s["content_text"] or "").strip()
+            if text:
+                _add("```")
+                _add(text)
+                _add("```")
+            else:
+                _add("*(empty)*")
+                _add()
+
+    # Checkpoints
+    checkpoints = conv.get("checkpoints", [])
+    if checkpoints:
+        _add("---")
+        _add()
+        _add("## Checkpoints")
+        _add()
+        for cp in checkpoints:
+            _add(f"### Checkpoint at step {cp['step_index']}")
+            _add()
+            if cp.get("user_intent"):
+                _add(f"**User intent:**")
+                _add()
+                _add(cp["user_intent"])
+                _add()
+            if cp.get("session_summary"):
+                _add(f"**Session summary:**")
+                _add()
+                _add(cp["session_summary"])
+                _add()
+            if cp.get("code_change_summary"):
+                _add(f"**Code changes:**")
+                _add()
+                _add(cp["code_change_summary"])
+                _add()
+            if cp.get("memory_summary"):
+                _add(f"**Memory:**")
+                _add()
+                _add(cp["memory_summary"])
+                _add()
+            if cp.get("edited_files"):
+                _add(f"**Edited files:**")
+                _add()
+                for f in cp["edited_files"].split("\n"):
+                    if f.strip():
+                        _add(f"- `{f.strip()}`")
+                _add()
+
+    output = "\n".join(lines)
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output, encoding="utf-8")
+        print(f"Exported to {out_path}")
+    else:
+        print(output)
+
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Show database status."""
     idx = Indexer(db_path=args.db_path)
@@ -387,6 +552,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("--steps", type=int, default=20, help="Max steps to display (default: 20)")
     p_show.set_defaults(func=cmd_show)
 
+    # export
+    p_export = subparsers.add_parser("export", help="Export a conversation as structured markdown")
+    p_export.add_argument("cascade_id", help="Cascade UUID (or prefix)")
+    p_export.add_argument("-o", "--output", default=None, help="Output file path (default: stdout)")
+    p_export.set_defaults(func=cmd_export)
+
     # status
     p_status = subparsers.add_parser("status", help="Show database status")
     p_status.set_defaults(func=cmd_status)
@@ -409,8 +580,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
 
-    # Resolve cascade_id prefix for show command
-    if args.command == "show":
+    # Resolve cascade_id prefix for show/export commands
+    if args.command in ("show", "export"):
         idx = Indexer(db_path=args.db_path)
         if not idx.get_conversation(args.cascade_id):
             # Try prefix match

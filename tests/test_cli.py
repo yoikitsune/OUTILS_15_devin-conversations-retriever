@@ -288,3 +288,66 @@ def test_cli_html_real(real_db: Path | None, tmp_path: Path, capsys: pytest.Capt
     assert out_file.exists()
     content = out_file.read_text(encoding="utf-8")
     assert "Conversations Overview" in content
+
+
+def test_cli_export(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """export command outputs structured markdown to stdout."""
+    ret = main(["--db", str(db_path), "export", "cascade-001"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "# " in out
+    assert "cascade-001" in out
+    assert "Round" in out
+    assert "user_input" in out
+    assert "planner_response" in out
+    assert "How do I parse protobuf" in out
+    assert "## Checkpoints" in out
+    assert "User intent" in out
+
+
+def test_cli_export_to_file(db_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    """export with -o writes markdown to file."""
+    out_file = tmp_path / "export" / "conv.md"
+    ret = main(["--db", str(db_path), "export", "cascade-001", "-o", str(out_file)])
+    assert ret == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "cascade-001" in content
+    assert "Round" in content
+    assert "How do I parse protobuf" in content
+    out = capsys.readouterr().out
+    assert "Exported to" in out
+
+
+def test_cli_export_not_found(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """export with unknown ID returns error."""
+    ret = main(["--db", str(db_path), "export", "nonexistent-id"])
+    assert ret == 1
+    out = capsys.readouterr().out
+    assert "not found" in out
+
+
+def test_cli_export_prefix(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """export with cascade_id prefix resolves to full ID."""
+    ret = main(["--db", str(db_path), "export", "cascade"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "cascade-001" in out
+
+
+def test_cli_export_real(real_db: Path | None, capsys: pytest.CaptureFixture[str]):
+    """export on real database produces markdown with full content."""
+    if real_db is None:
+        pytest.skip("No .pb files available")
+    # Get first conversation ID
+    idx = Indexer(db_path=real_db)
+    convs = idx.list_conversations(limit=1)
+    idx.close()
+    if not convs:
+        pytest.skip("No conversations in real DB")
+    cascade_id = convs[0]["cascade_id"]
+    ret = main(["--db", str(real_db), "export", cascade_id])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "# " in out
+    assert "Round" in out or "Steps" in out

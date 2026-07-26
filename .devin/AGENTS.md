@@ -34,9 +34,13 @@ python3 -m venv .venv
 .venv/bin/devin-conversations-retriever
 
 # CLI
-.venv/bin/dcr decrypt-all
-.venv/bin/dcr index
+.venv/bin/dcr sync
 .venv/bin/dcr search "query"
+.venv/bin/dcr list
+.venv/bin/dcr show <cascade_id>
+.venv/bin/dcr export <cascade_id> [-o file]
+.venv/bin/dcr status
+.venv/bin/dcr html
 ```
 
 ## Key Files
@@ -48,6 +52,8 @@ python3 -m venv .venv
 - `src/dcr/decrypt.py` — AES-256-GCM decryption module
 - `src/dcr/parser.py` — protobuf wire-format parser
 - `src/dcr/indexer.py` — SQLite + FTS5 indexer with sync()
+- `src/dcr/search.py` — FTS5 search engine with filters and auto-sync
+- `src/dcr/cli.py` — CLI interface with 7 subcommands
 - `artifacts/` — gitignored, contains decrypted data
 
 ## Conventions
