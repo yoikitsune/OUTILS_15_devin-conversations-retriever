@@ -1,10 +1,10 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-26 (session 3 — M6 CLI)
+> Last updated: 2026-07-26 (session 3 — M6 CLI + docs)
 
-## Current Phase: Development in Progress
+## Current Phase: Core Complete (M2–M6)
 
-M2–M6 complete. Next step: M7 (MCP server, deferred).
+M2–M6 complete. M7 (MCP server) deferred. All docs and README up to date.
 
 ## Milestones
 

@@ -10,31 +10,33 @@
         ▼
   ┌─────────────┐
   │  decrypt.py  │  AES-256-GCM decryption
-  │  (reuse)     │  Key: safeCodeiumworldKeYsecretBalloon
+  │              │  Key: safeCodeiumworldKeYsecretBalloon
   └──────┬───────┘
          │ plaintext protobuf bytes
          ▼
   ┌─────────────┐
   │  parser.py   │  Protobuf wire-format parsing
-  │  (reuse)     │  CortexTrajectory → steps → rounds
+  │              │  CortexTrajectory → steps → rounds
   └──────┬───────┘
          │ structured conversation data
          ▼
   ┌─────────────┐
   │  indexer.py  │  SQLite + FTS5 indexing
-  │  (new)       │  conversations, rounds, steps tables
+  │              │  conversations, rounds, steps, checkpoints
+  │              │  sync() for incremental updates
   └──────┬───────┘
          │ indexed DB
          ▼
   ┌─────────────┐
-  │  search.py   │  FTS5 full-text search
-  │  (new)       │  with filters (project, date, type)
+  │  search.py   │  FTS5 full-text search (BM25)
+  │              │  filters: project, date, source_table
+  │              │  auto-sync before search
   └──────┬───────┘
          │ search results
          ▼
   ┌─────────────┐
-  │  server.py   │  MCP server (FastMCP, stdio)
-  │  (new)       │  Exposes tools to Cascade/any MCP client
+  │  cli.py      │  Command-line interface
+  │              │  sync, search, list, show, status, html
   └─────────────┘
 ```
 
@@ -92,39 +94,52 @@
 ### `search.py` — Search Engine
 
 - **Query type**: FTS5 full-text (BM25 ranking)
-- **Filters**: conversation_id, date range, step type, variant_field
-- **Result format**: List of matches with conversation title, round number, step index, snippet, score
+- **Tables searched**: `rounds_fts`, `steps_fts`, `checkpoints_fts` (all by default, or restrict via `source_table`)
+- **Filters**: `project` (exact + prefix match), `date_from`/`date_to` (on `created_at`), `source_table` (rounds/steps/checkpoints)
+- **Snippets**: FTS5 `snippet()` with `>>>match<<<` markers, 20-word window
+- **Query escaping**: Tokens wrapped in double quotes to prevent FTS5 syntax injection; `AND`/`OR`/`NOT` preserved
+- **Deduplication**: `search_conversations()` returns one result per conversation (best match)
+- **Auto-sync**: Calls `sync()` before search if `auto_sync=True` (default)
+- **Result format**: `SearchResult` dataclass with conversation metadata, source table, snippet, score
 - **Limit**: Configurable, default 50
 
-### `server.py` — MCP Server
+### `cli.py` — Command-Line Interface
+
+- **Entry point**: `dcr` (declared in `pyproject.toml`)
+- **Subcommands**:
+  - `dcr sync` — Sync database with cascade `.pb` files (incremental)
+  - `dcr search <query>` — Full-text search with `-p/--project`, `-s/--source`, `-l/--limit` filters
+  - `dcr list` — List conversations with `-l/--limit`, `--no-sync`
+  - `dcr show <cascade_id>` — Show conversation details (supports ID prefix)
+  - `dcr status` — Database statistics
+  - `dcr html` — Generate sortable HTML overview (`-o/--output`)
+- **Auto-sync**: Enabled by default for `search`, `list`, `html` (disable with `--no-sync`)
+- **Global option**: `--db <path>` to override database location
+
+### `server.py` — MCP Server (Deferred)
 
 - **Framework**: FastMCP (official Python SDK)
 - **Transport**: stdio (local)
-- **Tools**:
-  - `search_conversations(query, limit?, project?, date_from?, date_to?)` — Full-text search
-  - `list_conversations(limit?, project?)` — List with metadata
-  - `get_conversation(cascade_id, format?)` — Full conversation in Markdown
-  - `get_round(cascade_id, round_number)` — Specific round
-  - `decrypt_all()` — Decrypt + index new/modified `.pb` files
-  - `index_status()` — Indexing progress and stats
-
-### `models.py` — Pydantic Models
-
-- `Conversation`, `Round`, `Step`, `Checkpoint`, `SearchResult`
-- Input validation for all MCP tool parameters
+- **Status**: Deferred — MCP vs skill decision pending
+- **Planned tools**:
+  - `search_conversations(query, limit?, project?, date_from?, date_to?)`
+  - `list_conversations(limit?, project?)`
+  - `get_conversation(cascade_id)`
+  - `sync_database()`
+  - `index_status()`
 
 ## Data Flow
 
-1. **On `decrypt_all`**: Scan `~/.codeium/windsurf/cascade/*.pb`, decrypt each, parse, index in SQLite
-2. **On `search_conversations`**: FTS5 query → ranked results with snippets
-3. **On `get_conversation`**: Fetch from SQLite → render as Markdown (reuse `export_md.py` logic)
-4. **On `get_round`**: Fetch specific round → render as Markdown
+1. **On `dcr sync`**: Scan `~/.codeium/windsurf/cascade/*.pb`, decrypt each, parse, index in SQLite (incremental — skip unchanged)
+2. **On `dcr search`**: Auto-sync → FTS5 query across rounds/steps/checkpoints → ranked results with snippets
+3. **On `dcr show`**: Fetch conversation from SQLite → display metadata, rounds, steps, checkpoints
+4. **On `dcr html`**: Auto-sync → generate sortable HTML table of all conversations
 
 ## Dependencies
 
 | Package | Version | Purpose |
 |---|---|---|
-| `mcp` | >=1.27,<2 | MCP server SDK (FastMCP) |
+| `mcp` | >=1.27,<2 | MCP server SDK (FastMCP) — for M7 (deferred) |
 | `cryptography` | >=43.0 | AES-256-GCM decryption |
 | `protobuf` | >=5.0 | Protobuf wire-format parsing |
 | `pydantic` | >=2.0 | Data models & validation |
