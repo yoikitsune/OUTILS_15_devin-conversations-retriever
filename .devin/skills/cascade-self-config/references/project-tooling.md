@@ -5,15 +5,20 @@
 ### Commandes valides
 | Commande | Usage | Notes |
 |---|---|---|
-| `.venv/bin/python3` | Exécuter Python dans le venv | venv déjà créé avec cryptography + protobuf |
-| `.venv/bin/pip install -e ".[dev]"` | Installer le projet en mode dev | Pas encore fait (pyproject.toml à créer) |
-| `.venv/bin/pytest tests/ -v` | Lancer les tests | Tests à créer |
-| `.venv/bin/dcr decrypt-all` | Décrypter tous les .pb | CLI à créer |
-| `.venv/bin/dcr index` | Indexer dans SQLite FTS5 | CLI à créer |
+| `.venv/bin/python3` | Exécuter Python dans le venv | venv avec cryptography, protobuf, pydantic, pytest |
+| `.venv/bin/pip install -e ".[dev]"` | Installer le projet en mode dev | Déjà fait |
+| `.venv/bin/pytest tests/ -v` | Lancer les tests | 116 tests, tous passants |
+| `.venv/bin/dcr sync` | Synchroniser la BDD avec les .pb (archive les stale, jamais supprime) | CLI opérationnel |
+| `.venv/bin/dcr search "query"` | Recherche full-text (FTS5, BM25) | CLI opérationnel |
+| `.venv/bin/dcr list` | Lister les conversations indexées | CLI opérationnel |
+| `.venv/bin/dcr show <cascade_id>` | Afficher une conversation (préfixe OK) | CLI opérationnel |
+| `.venv/bin/dcr export <cascade_id>` | Exporter une conversation en markdown | CLI opérationnel |
+| `.venv/bin/dcr status` | Statistiques de la BDD (active + archived) | CLI opérationnel |
+| `.venv/bin/dcr html` | Générer un aperçu HTML triable | CLI opérationnel |
 
 ### Pièges connus
-- Le venv existe mais n'a pas encore `mcp` ni `pydantic` installés
-- Les outils de décryptage sont à `/tmp/windsurf-decrypt/tools/` (temporaire, à copier dans `src/dcr/`)
+- La BDD SQLite (`~/.local/share/dcr/dcr.db`) est l'**archive permanente** — les conversations ne sont jamais supprimées, même si le `.pb` source disparaît
+- Les outils de décryptage ont été adaptés depuis `windsurf-local-user-data-decryption` dans `src/dcr/decrypt.py` et `src/dcr/parser.py`
 
 ## Outils Cascade internes
 
@@ -33,7 +38,5 @@
 
 | Fichier | Contenu | Statut |
 |---|---|---|
-| `/tmp/windsurf-decrypt/tools/decrypt_pb.py` | Décryptage AES-256-GCM | À adapter dans `src/dcr/decrypt.py` |
-| `/tmp/windsurf-decrypt/tools/scan_trajectory.py` | Parsing protobuf CortexTrajectory | À adapter dans `src/dcr/parser.py` |
-| `/tmp/windsurf-decrypt/tools/export_md.py` | Export Markdown | À adapter pour `get_conversation` tool |
-| `~/.codeium/windsurf/cascade/*.pb` | 50 fichiers de conversation | Source de données |
+| `~/.codeium/windsurf/cascade/*.pb` | Fichiers de conversation chiffrés | Source de données initiale — la BDD SQLite est l'archive permanente |
+| [windsurf-local-user-data-decryption](https://github.com/dayearleo/windsurf-local-user-data-decryption) | Décryptage + parsing (MIT) | Adapté dans `src/dcr/decrypt.py` et `src/dcr/parser.py` |
