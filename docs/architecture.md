@@ -112,7 +112,7 @@
   - `dcr list` — List conversations with `-l/--limit`, `--no-sync`
   - `dcr show <cascade_id>` — Show conversation details (supports ID prefix)
   - `dcr status` — Database statistics
-  - `dcr html` — Generate sortable HTML overview (`-o/--output`)
+  - `dcr html` — Generate sortable HTML overview (`-o/--output`), date columns use `data-sort` attribute with Unix timestamp for correct numeric sorting
 - **Auto-sync**: Enabled by default for `search`, `list`, `html` (disable with `--no-sync`)
 - **Global option**: `--db <path>` to override database location
 

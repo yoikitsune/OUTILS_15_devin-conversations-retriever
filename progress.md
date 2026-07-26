@@ -102,3 +102,9 @@ If you're picking up this project in a new session:
 15. Next step: M7 — MCP server (deferred per user decision — MCP vs skill discussion pending)
 16. Total tests: 106 (10 decrypt + 23 parser + 32 indexer + 24 search + 17 CLI), all passing
 17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list`, `dcr show <cascade_id>`, `dcr status`, `dcr html`
+
+## Bug History
+
+| # | Date | Description | Fix | File |
+|---|---|---|---|---|
+| B1 | 2026-07-26 | HTML overview: sorting by date columns didn't work (`parseFloat("2026-07-25")` returned `2026`, all dates sorted equally) | Added `data-sort` attribute with raw Unix timestamp on date `<td>` elements; JS sort logic checks `data-sort` first | `src/dcr/cli.py` |

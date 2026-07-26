@@ -234,14 +234,16 @@ def cmd_html(args: argparse.Namespace) -> int:
         branch = html_mod.escape(c["git_branch"] or "—")
         model = html_mod.escape(c["model"] or "—")
         title = html_mod.escape(c["title"] or "—")
+        created_ts = c['created_at'] if c['created_at'] else 0
+        updated_ts = c['updated_at'] if c['updated_at'] else 0
         rows.append(f"""<tr>
       <td>{c['id']}</td>
       <td class="title">{title}</td>
       <td>{project}</td>
       <td>{branch}</td>
       <td>{model}</td>
-      <td>{created}</td>
-      <td>{updated}</td>
+      <td data-sort="{created_ts}">{created}</td>
+      <td data-sort="{updated_ts}">{updated}</td>
       <td class="num">{c['step_count']}</td>
       <td class="num">{c['round_count']}</td>
       <td class="num">{c['checkpoint_count']}</td>
@@ -298,6 +300,11 @@ def cmd_html(args: argparse.Namespace) -> int:
       const dir = th.dataset.dir === 'asc' ? -1 : 1;
       th.dataset.dir = dir === 1 ? 'asc' : 'desc';
       rows.sort((a, b) => {{
+        const ca = a.children[i].getAttribute('data-sort');
+        const cb = b.children[i].getAttribute('data-sort');
+        if (ca !== null && cb !== null) {{
+          return (parseFloat(ca) - parseFloat(cb)) * dir;
+        }}
         const va = a.children[i].textContent.trim();
         const vb = b.children[i].textContent.trim();
         const na = parseFloat(va), nb = parseFloat(vb);
