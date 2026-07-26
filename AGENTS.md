@@ -1,6 +1,6 @@
 # AGENTS.md — Devin Conversations Retriever
 
-> MCP server to decrypt, index, and permanently archive local Windsurf Cascade conversation histories. The SQLite database is a permanent archive — conversations are never deleted.
+> CLI tool to decrypt, index, and permanently archive local Windsurf Cascade conversation histories. The SQLite database is a permanent archive — conversations are never deleted.
 
 ## Quick Start
 
@@ -9,11 +9,7 @@
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 
-# Run MCP server (stdio)
-.venv/bin/devin-conversations-retriever
-
 # Decrypt + index all conversations
-# (via CLI)
 .venv/bin/dcr sync
 .venv/bin/dcr status
 ```
@@ -21,11 +17,10 @@ python3 -m venv .venv
 ## Tech Stack
 
 - **Language**: Python 3.10+
-- **MCP SDK**: `mcp` (official Python SDK, FastMCP)
 - **Encryption**: `cryptography` (AES-256-GCM decryption)
 - **Protobuf**: `protobuf` (parsing CortexTrajectory)
 - **Search**: SQLite + FTS5 (full-text search)
-- **Transport**: stdio (local MCP)
+- **Interface**: CLI (`argparse`) — MCP server rejected per ADR-0004
 
 ## Project Structure
 
@@ -44,7 +39,7 @@ python3 -m venv .venv
 ├── src/
 │   └── dcr/               # Main package
 │       ├── __init__.py
-│       ├── server.py      # MCP server entry point
+│       ├── server.py      # MCP server (rejected — see ADR-0004)
 │       ├── decrypt.py     # .pb decryption module
 │       ├── parser.py      # Protobuf parsing (CortexTrajectory)
 │       ├── indexer.py     # SQLite + FTS5 indexing

@@ -4,7 +4,7 @@
 
 ## Project
 
-**Devin Conversations Retriever (DCR)** — A CLI tool that decrypts, indexes, and enables full-text search across local Windsurf Cascade conversation histories (`.pb` files). The SQLite database is a **permanent archive** — conversations are never deleted, even when the source `.pb` file is removed by Windsurf. MCP server integration planned but deferred.
+**Devin Conversations Retriever (DCR)** — A CLI tool that decrypts, indexes, and enables full-text search across local Windsurf Cascade conversation histories (`.pb` files). The SQLite database is a **permanent archive** — conversations are never deleted, even when the source `.pb` file is removed by Windsurf. CLI-only — MCP server rejected (see ADR-0004).
 
 ## Why
 
@@ -29,15 +29,16 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 | [`/src/dcr/indexer.py`](../src/dcr/indexer.py) | SQLite + FTS5 indexing with sync() | Completed (M4) |
 | [`/src/dcr/search.py`](../src/dcr/search.py) | FTS5 search engine with filters and auto-sync | Completed (M5) |
 | [`/src/dcr/cli.py`](../src/dcr/cli.py) | CLI interface (`dcr`) with 7 subcommands | Completed (M6) |
-| [`/src/dcr/server.py`](../src/dcr/server.py) | MCP server (FastMCP) | Deferred (M7) |
+| [`/src/dcr/server.py`](../src/dcr/server.py) | MCP server (FastMCP) | Rejected (M7) — see [ADR-0004](decisions/0004-cli-over-mcp.md) |
 
 ## Decision Records
 
 | ADR | Title | Status |
 |---|---|---|
-| [ADR-0001](decisions/0001-use-python-mcp-sdk.md) | Use Python + MCP SDK (FastMCP) | Accepted |
+| [ADR-0001](decisions/0001-use-python-mcp-sdk.md) | Use Python + MCP SDK (FastMCP) | Accepted (MCP rationale superseded by ADR-0004) |
 | [ADR-0002](decisions/0002-sqlite-fts5-for-search.md) | SQLite + FTS5 for full-text search | Accepted |
 | [ADR-0003](decisions/0003-reuse-windsurf-decrypt-tools.md) | Reuse windsurf-local-user-data-decryption tools | Accepted |
+| [ADR-0004](decisions/0004-cli-over-mcp.md) | CLI + Skill over MCP server | Accepted |
 
 ## Verification
 

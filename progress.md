@@ -1,10 +1,10 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-26 (session 5 — archival pérenne)
+> Last updated: 2026-07-26 (session 6 — ADR-0004 + intégration cascade-self-config)
 
 ## Current Phase: Core Complete (M2–M6)
 
-M2–M6 complete. M7 (MCP server) deferred. Archival pérenne des conversations implémentée — les conversations dont le .pb est supprimé sont marquées archived, jamais détruites.
+M2–M6 complete. M7 (MCP server) rejected (ADR-0004). Intégration Cascade via Rule globale + cascade-self-config (patterns diagnostiques). Archival pérenne des conversations implémentée — les conversations dont le .pb est supprimé sont marquées archived, jamais détruites.
 
 ## Milestones
 
@@ -99,7 +99,7 @@ If you're picking up this project in a new session:
 12. Source repo for reference: https://github.com/dayearleo/windsurf-local-user-data-decryption (MIT)
 13. DB location: `~/.local/share/dcr/dcr.db` — 50 conversations, 9161 steps, 499 rounds, 164 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
-15. Next step: M7 rejected (ADR-0004). CLI is the sole interface. Future: dedicated Cascade skill for DCR integration
+15. Next step: M7 rejected (ADR-0004). CLI is the sole interface. Integration via Rule (discovery) + cascade-self-config (procedure). ADR-0004 documents the full decision with 21 sources.
 16. Total tests: 116 (10 decrypt + 23 parser + 34 indexer + 24 search + 25 CLI), all passing
 17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list`, `dcr show <cascade_id>`, `dcr export <cascade_id> [-o file]`, `dcr status`, `dcr html`
 

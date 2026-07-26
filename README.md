@@ -128,7 +128,8 @@ Each conversation is indexed with:
 ## Sources
 
 - Decryption and parsing logic adapted from [windsurf-local-user-data-decryption](https://github.com/dayearleo/windsurf-local-user-data-decryption) (MIT)
-- The AES key (`safeCodeiumworldKeYsecretBalloon`) is a known global constant — see [ADR-0001](docs/decisions/0001-use-python-mcp-sdk.md)
+- The AES key (`safeCodeiumworldKeYsecretBalloon`) is a known global constant — see [ADR-0003](docs/decisions/0003-reuse-windsurf-decrypt-tools.md)
+- MCP server rejected in favor of CLI + Rule + cascade-self-config integration — see [ADR-0004](docs/decisions/0004-cli-over-mcp.md)
 
 ## Project Structure
 
