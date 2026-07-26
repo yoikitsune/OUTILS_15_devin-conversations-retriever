@@ -77,3 +77,78 @@ Workflow `/end-session` : `.devin/workflows/end-session.md` — procédure struc
 
 ### Artifact créé
 - `.devin/workflows/end-session.md`
+
+## ERR-006 : `docs/index.md` jamais mis à jour
+
+**Catégorie** : process-gap (non-respect de rule existante)
+**Date** : 2026-07-26
+**Conversation source** : "Enhance Indexer with Metadata"
+
+### Erreur
+La rule `update-docs.md` exigeait la mise à jour de `docs/index.md` lors de l'ajout de fichiers. `docs/index.md` est resté à la date du 2026-07-24 (M1) malgré l'ajout de 3 modules source (`decrypt.py`, `parser.py`, `indexer.py`) et l'enrichissement du schéma. La Documentation Map ne mentionne aucun fichier source.
+
+### Correction appliquée
+Renforcement de la rule `update-docs.md` : checklist ordonnée explicite, `docs/index.md` mentionné avec instruction de mettre à jour la date et la Documentation Map. Correction immédiate de `docs/index.md`.
+
+### Artifact créé
+- Modification de `.devin/rules/update-docs.md`
+
+## ERR-007 : `.devin/AGENTS.md` — inventaire incomplet
+
+**Catégorie** : process-gap (non-respect de rule existante)
+**Date** : 2026-07-26
+**Conversation source** : "Enhance Indexer with Metadata"
+
+### Erreur
+La rule `update-docs.md` exigeait que `AGENTS.md` reflète la structure réelle du projet. La section "Key Files" de `.devin/AGENTS.md` ne mentionnait aucun fichier source (`src/dcr/decrypt.py`, `src/dcr/parser.py`, `src/dcr/indexer.py`).
+
+### Correction appliquée
+Renforcement de la rule `update-docs.md` : instruction explicite d'inclure les fichiers source `src/dcr/*.py` dans la section Key Files. Correction immédiate de `.devin/AGENTS.md`.
+
+### Artifact créé
+- Modification de `.devin/rules/update-docs.md`
+
+## ERR-008 : Commits groupés au lieu d'être par feature
+
+**Catégorie** : process-gap (absence de rule)
+**Date** : 2026-07-26
+**Conversation source** : "Enhance Indexer with Metadata"
+
+### Erreur
+Aucune rule n'encadrait la stratégie de commits. M2+M3 ont été combinés en un seul commit (`f0ed6a6`). L'enrichissement des champs et le `sync()` ont été combinés en un seul commit (`0200079`). Les commits ont été faits en bloc à la fin de la session, pas après chaque milestone.
+
+### Correction appliquée
+Rule `model_decision` : `.devin/rules/git-commit-discipline.md` — un commit par feature/milestone, tests avant commit, pas de commit en bloc, format de message standardisé.
+
+### Artifact créé
+- `.devin/rules/git-commit-discipline.md`
+
+## ERR-009 : `docs/architecture.md` mis à jour tardivement
+
+**Catégorie** : process-gap (rule imprécise)
+**Date** : 2026-07-26
+**Conversation source** : "Enhance Indexer with Metadata"
+
+### Erreur
+`docs/architecture.md` n'a été mis à jour qu'une seule fois — après l'enrichissement des champs (step ~208), pas après la completion initiale de M4 (step ~132). Le schéma intermédiaire n'a jamais été documenté. La rule `update-docs.md` ne mentionnait pas explicitement `docs/architecture.md`.
+
+### Correction appliquée
+Renforcement de la rule `update-docs.md` : `docs/architecture.md` ajouté explicitement dans la checklist (point 2), avec instruction de mettre à jour si le schema, les modules ou les champs ont changé.
+
+### Artifact créé
+- Modification de `.devin/rules/update-docs.md`
+
+## ERR-010 : Workflow `/end-session` non exécuté
+
+**Catégorie** : process-gap (non-respect de workflow existant)
+**Date** : 2026-07-26
+**Conversation source** : "Enhance Indexer with Metadata"
+
+### Erreur
+Le workflow `/end-session` existe (créé pour ERR-005) mais n'a pas été invoqué à la fin de la conversation. Les "AI Handoff Notes" ont été mises à jour manuellement dans `progress.md` mais pas via le workflow structuré.
+
+### Correction appliquée
+Ajout d'un rappel dans la rule `update-docs.md` (point 6) : invoquer `/end-session` en fin de session pour un handoff structuré.
+
+### Artifact créé
+- Modification de `.devin/rules/update-docs.md`

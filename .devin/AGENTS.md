@@ -9,9 +9,10 @@
 ## Inventory
 
 ### Rules
-- `update-docs` (model_decision) — met a jour progress.md, docs/index.md, AGENTS.md quand un milestone est complete ou en fin de session
+- `update-docs` (model_decision) — met a jour progress.md, docs/architecture.md, docs/index.md, AGENTS.md quand un milestone est complete ou en fin de session
 - `definition-of-done` (model_decision) — criteres pour marquer un milestone comme termine
 - `test-with-code` (model_decision) — exige un test par module avant de passer au milestone suivant
+- `git-commit-discipline` (model_decision) — un commit par feature/milestone, tests avant commit, pas de commit en bloc
 
 ### Skills
 - `cascade-self-config` (global skill, project references in `.devin/skills/cascade-self-config/references/`)
@@ -42,7 +43,11 @@ python3 -m venv .venv
 
 - `progress.md` — current status, read first
 - `docs/architecture.md` — technical design before coding
+- `docs/index.md` — documentation router
 - `docs/decisions/` — ADRs for design rationale
+- `src/dcr/decrypt.py` — AES-256-GCM decryption module
+- `src/dcr/parser.py` — protobuf wire-format parser
+- `src/dcr/indexer.py` — SQLite + FTS5 indexer with sync()
 - `artifacts/` — gitignored, contains decrypted data
 
 ## Conventions
