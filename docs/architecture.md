@@ -94,7 +94,8 @@
   - `checkpoints`: id, conversation_id, step_index, checkpoint_index, user_intent, session_summary, code_change_summary, memory_summary, conversation_title, plan_snapshot, intent_only, included_step_index_start, included_step_index_end, edited_files
 - **FTS5 virtual tables**: `rounds_fts` (prompt), `steps_fts` (content_text), `checkpoints_fts` (user_intent, session_summary, code_change_summary, memory_summary, conversation_title)
 - **Triggers**: 9 auto-sync triggers (insert/delete/update on each FTS5 table)
-- **Indexes**: cascade_id, project_path, created_at, conversation_id (rounds/steps/checkpoints)
+- **Indexes**: cascade_id, project_path, created_at, archived, conversation_id (rounds/steps/checkpoints)
+- **Migrations**: `MIGRATION_SQL` list — `ALTER TABLE` statements run after `SCHEMA_SQL`, with `try/except` for idempotency. Indexes depending on migrated columns are created here too (e.g. `idx_conversations_archived`).
 - **Indexing strategy**: Incremental — skip files where mtime + size match existing record. Conversations whose `.pb` file no longer exists are **archived** (archived=1), never deleted.
 
 ### `search.py` — Search Engine
@@ -123,17 +124,11 @@
 - **Auto-sync**: Enabled by default for `search`, `list`, `html` (disable with `--no-sync`)
 - **Global option**: `--db <path>` to override database location
 
-### `server.py` — MCP Server (Deferred)
+### `server.py` — MCP Server (Rejected)
 
-- **Framework**: FastMCP (official Python SDK)
-- **Transport**: stdio (local)
-- **Status**: Deferred — MCP vs skill decision pending
-- **Planned tools**:
-  - `search_conversations(query, limit?, project?, date_from?, date_to?)`
-  - `list_conversations(limit?, project?)`
-  - `get_conversation(cascade_id)`
-  - `sync_database()`
-  - `index_status()`
+- **Status**: Rejected — see [ADR-0004](decisions/0004-cli-over-mcp.md)
+- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 114 tests. 0/9 decision criteria favor MCP for this use case.
+- **Integration path**: DCR integrates with Cascade via CLI calls (`run_command`) and optionally via a dedicated skill. No MCP configuration needed.
 
 ## Data Flow
 

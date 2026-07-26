@@ -16,7 +16,7 @@ M2–M6 complete. M7 (MCP server) deferred. Archival pérenne des conversations 
 | M4 | SQLite FTS5 indexer (`indexer.py`) + tests | Completed | 2026-07-26 — 4 tables + 3 FTS5 + 9 triggers, enriched fields (project, branch, model, timestamps, title), sync() for incremental updates, 32 tests, validated on real .pb |
 | M5 | Search engine (`search.py`) + tests | Completed | 2026-07-26 — FTS5 BM25 search, filters (project, date, source_table), snippets, auto-sync, search_conversations dedup, 24 tests |
 | M6 | CLI interface (`dcr`) + tests | Completed | 2026-07-26 — 7 subcommands (sync, search, list, show, export, status, html), auto-sync, prefix resolution, 25 tests |
-| M7 | MCP server (`server.py`) + tests | Deferred | MCP vs skill : decision reportee par l'utilisateur |
+| M7 | MCP server (`server.py`) + tests | Rejected | CLI over MCP — voir ADR-0004. Coût token permanent pour usage occasionnel, 0/9 critères favorables au MCP |
 
 > Tests are integrated into each milestone (M2–M7), not a separate milestone.
 
@@ -75,7 +75,7 @@ M2–M6 complete. M7 (MCP server) deferred. Archival pérenne des conversations 
 
 ## What's In Progress
 
-Nothing currently in progress. M7 (MCP server) is deferred per user decision.
+Nothing currently in progress. M7 (MCP server) rejected per ADR-0004 — CLI is the sole interface.
 
 ## What's Blocked
 
@@ -99,7 +99,7 @@ If you're picking up this project in a new session:
 12. Source repo for reference: https://github.com/dayearleo/windsurf-local-user-data-decryption (MIT)
 13. DB location: `~/.local/share/dcr/dcr.db` — 50 conversations, 9161 steps, 499 rounds, 164 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
-15. Next step: M7 — MCP server (deferred per user decision — MCP vs skill discussion pending)
+15. Next step: M7 rejected (ADR-0004). CLI is the sole interface. Future: dedicated Cascade skill for DCR integration
 16. Total tests: 116 (10 decrypt + 23 parser + 34 indexer + 24 search + 25 CLI), all passing
 17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list`, `dcr show <cascade_id>`, `dcr export <cascade_id> [-o file]`, `dcr status`, `dcr html`
 
@@ -109,3 +109,4 @@ If you're picking up this project in a new session:
 |---|---|---|---|---|
 | B1 | 2026-07-26 | HTML overview: sorting by date columns didn't work (`parseFloat("2026-07-25")` returned `2026`, all dates sorted equally) | Added `data-sort` attribute with raw Unix timestamp on date `<td>` elements; JS sort logic checks `data-sort` first | `src/dcr/cli.py` |
 | B2 | 2026-07-26 | **Perte de données** : `sync()` supprimait les conversations dont le .pb n'existait plus sur le disque (`remove_stale=True` par défaut). L'auto-sync avant chaque recherche déclenchait cette suppression. | Ajout colonnes `archived` + `archived_at` au schéma. `sync()` fait maintenant un `UPDATE archived=1` au lieu de `DELETE`. Le paramètre `remove_stale` est déprécié (ignoré). Migration automatique des BDD existantes via `ALTER TABLE`. | `src/dcr/indexer.py` |
+| B3 | 2026-07-26 | **Migration cassée** : `CREATE INDEX idx_conversations_archived ON conversations(archived)` dans `SCHEMA_SQL` s'exécutait avant les `ALTER TABLE` de `MIGRATION_SQL`, échouant sur les DB existantes sans la colonne `archived`. | Déplacé la création de l'index `idx_conversations_archived` de `SCHEMA_SQL` vers `MIGRATION_SQL` (après les `ALTER TABLE`). | `src/dcr/indexer.py` |

@@ -160,12 +160,12 @@ CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created
 CREATE INDEX IF NOT EXISTS idx_rounds_conversation_id ON rounds(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_steps_conversation_id ON steps(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_checkpoints_conversation_id ON checkpoints(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(archived);
 """
 
 MIGRATION_SQL = [
     "ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0",
     "ALTER TABLE conversations ADD COLUMN archived_at TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(archived)",
 ]
 
 
