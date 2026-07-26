@@ -1,6 +1,6 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-24
+> Last updated: 2026-07-26
 
 ## Overview
 
@@ -52,28 +52,42 @@
 
 - **Source**: Adapted from `windsurf-local-user-data-decryption/tools/scan_trajectory.py`
 - **Input**: Decrypted protobuf bytes
-- **Output**: Structured `CortexTrajectory` with:
-  - `trajectory_id`: UUID
-  - `cascade_id`: UUID (filename stem)
-  - `steps`: List of step dicts with `type`, `variant_field`, `variant_data`
-  - `checkpoints`: List of checkpoint summaries
+- **Output**: Structured `TrajectoryInfo` with:
+  - `trajectory_id`: UUID (top-level field 1)
+  - `cascade_id`: UUID (top-level field 6, filename stem)
+  - `project_path`: Project directory (top-level field 7 → field 1 → field 1, stripped of `file://` prefix)
+  - `git_branch`: Git branch name (top-level field 7 → field 1 → field 4)
+  - `model`: AI model name (step metadata field 28, e.g. `glm-5-2`)
+  - `created_at`: Timestamp of first step (Unix epoch seconds)
+  - `updated_at`: Timestamp of last step
+  - `title`: Derived from checkpoint `user_intent` first line, fallback to first user prompt
+  - `steps`: List of `StepInfo` with `type`, `status`, `variant_field`, `variant_data`, `content_text`, `timestamp`, `model`
+  - `checkpoints`: List of `CheckpointInfo` with summaries, edited files, plan snapshots
+  - `rounds`: List of `RoundInfo` grouping steps by user input cycles
 - **Key variant_fields**:
   - `19` = user_input (user's prompt)
-  - `20` = planner_response (AI's response + internal planning)
+  - `20` = planner_response (AI's response, field 8 = visible text)
   - `28` = run_command (shell commands)
   - `30` = checkpoint (compression summary)
   - `37` = command_result (command output)
+- **Title derivation logic**:
+  1. `conversation_title` from any checkpoint (field 10) — usually empty
+  2. First line of `user_intent` from first checkpoint (field 4) — e.g. "Merge Conflict Resolution\n..."
+  3. First user prompt truncated to 80 chars
+  4. `cascade_id` or `trajectory_id` as last resort
 
 ### `indexer.py` — SQLite + FTS5 Indexing
 
-- **Database**: `~/.local/share/dcr/dcr.db` (or configurable via env)
+- **Database**: `~/.local/share/dcr/dcr.db` (or configurable)
 - **Tables**:
-  - `conversations`: id, cascade_id, trajectory_id, title, created_at, step_count, round_count
+  - `conversations`: id, cascade_id, trajectory_id, title, trajectory_type, source, project_path, git_branch, model, created_at, updated_at, step_count, round_count, checkpoint_count, pb_mtime, pb_size, indexed_at
   - `rounds`: id, conversation_id, round_number, prompt, start_step, end_step
-  - `steps`: id, conversation_id, round_id, step_index, type, variant_field, content_text
-  - `checkpoints`: id, conversation_id, step_index, user_intent, session_summary, code_change_summary
-- **FTS5 virtual tables**: on `rounds.prompt`, `steps.content_text`, `checkpoints.*`
-- **Indexing strategy**: Incremental — only re-index new/modified `.pb` files (based on mtime hash)
+  - `steps`: id, conversation_id, step_index, type, status, variant_field, content_text, timestamp, model
+  - `checkpoints`: id, conversation_id, step_index, checkpoint_index, user_intent, session_summary, code_change_summary, memory_summary, conversation_title, plan_snapshot, intent_only, included_step_index_start, included_step_index_end, edited_files
+- **FTS5 virtual tables**: `rounds_fts` (prompt), `steps_fts` (content_text), `checkpoints_fts` (user_intent, session_summary, code_change_summary, memory_summary, conversation_title)
+- **Triggers**: 9 auto-sync triggers (insert/delete/update on each FTS5 table)
+- **Indexes**: cascade_id, project_path, created_at, conversation_id (rounds/steps/checkpoints)
+- **Indexing strategy**: Incremental — skip files where mtime + size match existing record
 
 ### `search.py` — Search Engine
 
