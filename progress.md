@@ -1,10 +1,10 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-26 (session 3 — M5 search engine)
+> Last updated: 2026-07-26 (session 3 — M6 CLI)
 
 ## Current Phase: Development in Progress
 
-M2–M5 complete. Next step is M6 (CLI interface).
+M2–M6 complete. Next step: M7 (MCP server, deferred).
 
 ## Milestones
 
@@ -15,7 +15,7 @@ M2–M5 complete. Next step is M6 (CLI interface).
 | M3 | Protobuf parser (`parser.py`) + tests | Completed | 2026-07-26 — wire-format parser, 4 dataclasses, text extraction, round grouping, 23 tests, validated on real .bin |
 | M4 | SQLite FTS5 indexer (`indexer.py`) + tests | Completed | 2026-07-26 — 4 tables + 3 FTS5 + 9 triggers, enriched fields (project, branch, model, timestamps, title), sync() for incremental updates, 32 tests, validated on real .pb |
 | M5 | Search engine (`search.py`) + tests | Completed | 2026-07-26 — FTS5 BM25 search, filters (project, date, source_table), snippets, auto-sync, search_conversations dedup, 24 tests |
-| M6 | CLI interface (`dcr`) + tests | Not Started | decrypt-all, index, search subcommands — priorité utilisateur |
+| M6 | CLI interface (`dcr`) + tests | Completed | 2026-07-26 — 6 subcommands (sync, search, list, show, status, html), auto-sync, prefix resolution, 17 tests |
 | M7 | MCP server (`server.py`) + tests | Deferred | MCP vs skill : decision reportee par l'utilisateur |
 
 > Tests are integrated into each milestone (M2–M7), not a separate milestone.
@@ -66,10 +66,16 @@ M2–M5 complete. Next step is M6 (CLI interface).
 - [x] M5: search_conversations() — deduplicated one-per-conversation results
 - [x] M5: Auto-sync before search (configurable via auto_sync param)
 - [x] M5: `tests/test_search.py` — 24 tests (basic, filters, source table, dedup, auto-sync, escaping, real data)
+- [x] M6: `src/dcr/cli.py` — argparse CLI with 6 subcommands (sync, search, list, show, status, html)
+- [x] M6: Auto-sync before search/list/html (configurable via --no-sync)
+- [x] M6: Cascade ID prefix resolution for show command
+- [x] M6: HTML generation with sortable table
+- [x] M6: Entry point `dcr` declared in pyproject.toml
+- [x] M6: `tests/test_cli.py` — 17 tests (all subcommands, filters, prefix, empty DB, real data)
 
 ## What's In Progress
 
-Nothing currently in progress. M6 (CLI interface) is next.
+Nothing currently in progress. M7 (MCP server) is deferred per user decision.
 
 ## What's Blocked
 
@@ -93,5 +99,6 @@ If you're picking up this project in a new session:
 12. Source repo for reference: https://github.com/dayearleo/windsurf-local-user-data-decryption (MIT)
 13. DB location: `~/.local/share/dcr/dcr.db` — 50 conversations, 9161 steps, 499 rounds, 164 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
-15. Next step: M6 — CLI interface (`dcr`) — decrypt-all, sync, index, search, list, show subcommands
-16. Total tests: 89 (10 decrypt + 23 parser + 32 indexer + 24 search), all passing
+15. Next step: M7 — MCP server (deferred per user decision — MCP vs skill discussion pending)
+16. Total tests: 106 (10 decrypt + 23 parser + 32 indexer + 24 search + 17 CLI), all passing
+17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list`, `dcr show <cascade_id>`, `dcr status`, `dcr html`
