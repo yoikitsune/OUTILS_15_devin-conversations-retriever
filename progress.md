@@ -1,10 +1,10 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-26 (session 3 — M4 + fields + sync)
+> Last updated: 2026-07-26 (session 3 — M5 search engine)
 
 ## Current Phase: Development in Progress
 
-M2 (decryption), M3 (parser), M4 (indexer) complete with enriched fields and sync. Next step is M5 (search engine).
+M2–M5 complete. Next step is M6 (CLI interface).
 
 ## Milestones
 
@@ -14,7 +14,7 @@ M2 (decryption), M3 (parser), M4 (indexer) complete with enriched fields and syn
 | M2 | Decryption module (`decrypt.py`) + tests | Completed | 2026-07-26 — 3 functions (decrypt_bytes, decrypt_file, decrypt_batch), 10 tests, validated on real .pb |
 | M3 | Protobuf parser (`parser.py`) + tests | Completed | 2026-07-26 — wire-format parser, 4 dataclasses, text extraction, round grouping, 23 tests, validated on real .bin |
 | M4 | SQLite FTS5 indexer (`indexer.py`) + tests | Completed | 2026-07-26 — 4 tables + 3 FTS5 + 9 triggers, enriched fields (project, branch, model, timestamps, title), sync() for incremental updates, 32 tests, validated on real .pb |
-| M5 | Search engine (`search.py`) + tests | Not Started | FTS5 queries with filters |
+| M5 | Search engine (`search.py`) + tests | Completed | 2026-07-26 — FTS5 BM25 search, filters (project, date, source_table), snippets, auto-sync, search_conversations dedup, 24 tests |
 | M6 | CLI interface (`dcr`) + tests | Not Started | decrypt-all, index, search subcommands — priorité utilisateur |
 | M7 | MCP server (`server.py`) + tests | Deferred | MCP vs skill : decision reportee par l'utilisateur |
 
@@ -60,10 +60,16 @@ M2 (decryption), M3 (parser), M4 (indexer) complete with enriched fields and syn
 - [x] Sync: Added `sync()` method — detects new/modified/deleted .pb files, uses DEFAULT_CASCADE_DIR
 - [x] Sync: 8 new tests (new, unchanged, modified, stale deletion, stale keep, new file detection, default dir, real data)
 - [x] HTML overview: `conversations.html` generated at `~/.local/share/dcr/`
+- [x] M5: `src/dcr/search.py` — SearchEngine class with FTS5 BM25 search across rounds/steps/checkpoints
+- [x] M5: Filters: project (exact + prefix), date_from/date_to, source_table restriction
+- [x] M5: Snippet extraction with >>> <<< markers, FTS5 query escaping
+- [x] M5: search_conversations() — deduplicated one-per-conversation results
+- [x] M5: Auto-sync before search (configurable via auto_sync param)
+- [x] M5: `tests/test_search.py` — 24 tests (basic, filters, source table, dedup, auto-sync, escaping, real data)
 
 ## What's In Progress
 
-Nothing currently in progress. M5 (search engine) is next.
+Nothing currently in progress. M6 (CLI interface) is next.
 
 ## What's Blocked
 
@@ -87,5 +93,5 @@ If you're picking up this project in a new session:
 12. Source repo for reference: https://github.com/dayearleo/windsurf-local-user-data-decryption (MIT)
 13. DB location: `~/.local/share/dcr/dcr.db` — 50 conversations, 9161 steps, 499 rounds, 164 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
-15. Next step: M5 — search engine (`src/dcr/search.py`) — FTS5 queries with BM25 ranking, filters (project, date, type), auto-sync before search
-16. Total tests: 65 (10 decrypt + 23 parser + 32 indexer), all passing
+15. Next step: M6 — CLI interface (`dcr`) — decrypt-all, sync, index, search, list, show subcommands
+16. Total tests: 89 (10 decrypt + 23 parser + 32 indexer + 24 search), all passing
