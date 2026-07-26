@@ -1,6 +1,6 @@
 # Devin Conversations Retriever (DCR)
 
-Decrypt, index, and search your local Windsurf Cascade conversation histories.
+Decrypt, index, and permanently archive your local Windsurf Cascade conversation histories.
 
 ## Why?
 
@@ -8,8 +8,9 @@ Windsurf stores conversation histories as AES-256-GCM encrypted protobuf files i
 
 - **Decrypting** all `.pb` files using the known AES key
 - **Parsing** the protobuf wire format without compiled schemas
-- **Indexing** conversations in SQLite with FTS5 full-text search
-- **Searching** across all conversations with BM25 ranking and filters
+- **Indexing** conversations in a permanent SQLite archive with FTS5 full-text search
+- **Archiving** conversations whose `.pb` file is later removed — they are never deleted from the database
+- **Searching** across all conversations (active and archived) with BM25 ranking and filters
 
 ## Quick Start
 
@@ -44,7 +45,7 @@ python3 -m venv .venv
 dcr [--db DB_PATH] <command> [options]
 
 Commands:
-  sync       Sync database with cascade .pb files
+  sync       Sync database with cascade .pb files (archives stale, never deletes)
   search     Full-text search conversations
   list       List indexed conversations
   show       Show a specific conversation (supports ID prefix)
@@ -82,17 +83,21 @@ Each conversation is indexed with:
 ```
 .pb files → decrypt.py → parser.py → indexer.py → search.py → cli.py
               AES-256     protobuf     SQLite+FTS5    BM25       argparse
-              GCM         wire-format  sync()         filters
+              GCM         wire-format  permanent      filters
+                                         archive
 ```
+
+> **The SQLite database is a permanent archive.** Once a conversation is indexed,
+> it is never deleted — even if the source `.pb` file is removed by Windsurf.
 
 | Module | Purpose | Tests |
 |---|---|---|
 | `decrypt.py` | AES-256-GCM decryption | 10 |
 | `parser.py` | Protobuf wire-format parsing | 23 |
-| `indexer.py` | SQLite + FTS5 indexing + sync | 32 |
+| `indexer.py` | SQLite + FTS5 indexing + sync + archival | 34 |
 | `search.py` | FTS5 search with filters + auto-sync | 24 |
-| `cli.py` | CLI with 6 subcommands | 17 |
-| **Total** | | **106** |
+| `cli.py` | CLI with 7 subcommands | 25 |
+| **Total** | | **116** |
 
 ## Database Schema
 
@@ -118,7 +123,7 @@ Each conversation is indexed with:
 - **Parsing**: `protobuf` (wire-format, no schema compilation)
 - **Search**: SQLite + FTS5 (BM25 ranking)
 - **CLI**: `argparse`
-- **Testing**: `pytest` (106 tests)
+- **Testing**: `pytest` (116 tests)
 
 ## Sources
 
@@ -135,7 +140,7 @@ Each conversation is indexed with:
 │   ├── indexer.py    # SQLite + FTS5 indexer with sync()
 │   ├── search.py     # FTS5 search engine
 │   └── cli.py        # CLI interface (dcr)
-├── tests/            # 106 tests
+├── tests/            # 116 tests
 ├── docs/             # Architecture, ADRs, index
 ├── progress.md       # Living status board
 └── pyproject.toml    # Dependencies + entry points

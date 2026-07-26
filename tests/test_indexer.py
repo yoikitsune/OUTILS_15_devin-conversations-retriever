@@ -489,7 +489,7 @@ def test_sync_new_files(indexer: Indexer, fake_cascade_dir: Path):
     assert result["new"] == 2
     assert result["updated"] == 0
     assert result["unchanged"] == 0
-    assert result["deleted"] == 0
+    assert result["archived"] == 0
     assert result["failed"] == 0
     status = indexer.get_status()
     assert status["conversation_count"] == 2
@@ -502,7 +502,7 @@ def test_sync_unchanged(indexer: Indexer, fake_cascade_dir: Path):
     assert result["new"] == 0
     assert result["updated"] == 0
     assert result["unchanged"] == 2
-    assert result["deleted"] == 0
+    assert result["archived"] == 0
 
 
 def test_sync_detects_modified(indexer: Indexer, fake_cascade_dir: Path):
@@ -518,26 +518,34 @@ def test_sync_detects_modified(indexer: Indexer, fake_cascade_dir: Path):
     assert conv["title"] == "Updated Title"
 
 
-def test_sync_removes_stale(indexer: Indexer, fake_cascade_dir: Path):
-    """sync() removes conversations whose .pb file was deleted."""
+def test_sync_archives_stale(indexer: Indexer, fake_cascade_dir: Path):
+    """sync() archives conversations whose .pb file was deleted (never deletes)."""
     indexer.sync(fake_cascade_dir)
     assert indexer.get_status()["conversation_count"] == 2
     (fake_cascade_dir / "conv-aaa.pb").unlink()
     result = indexer.sync(fake_cascade_dir)
-    assert result["deleted"] == 1
+    assert result["archived"] == 1
     assert result["unchanged"] == 1
-    assert indexer.get_status()["conversation_count"] == 1
-    assert indexer.get_conversation("conv-aaa") is None
+    # Conversation is still in the database, marked as archived
+    assert indexer.get_status()["conversation_count"] == 2
+    assert indexer.get_status()["archived_count"] == 1
+    assert indexer.get_status()["active_count"] == 1
+    conv = indexer.get_conversation("conv-aaa")
+    assert conv is not None
+    assert conv["archived"] == 1
+    assert conv["archived_at"] is not None
     assert indexer.get_conversation("conv-bbb") is not None
 
 
-def test_sync_keep_stale_when_disabled(indexer: Indexer, fake_cascade_dir: Path):
-    """sync(remove_stale=False) keeps stale conversations."""
+def test_sync_archives_stale_regardless_of_remove_stale_flag(indexer: Indexer, fake_cascade_dir: Path):
+    """sync() always archives stale conversations, remove_stale flag is deprecated."""
     indexer.sync(fake_cascade_dir)
     (fake_cascade_dir / "conv-aaa.pb").unlink()
+    # Even with remove_stale=False, conversations are archived (never deleted)
     result = indexer.sync(fake_cascade_dir, remove_stale=False)
-    assert result["deleted"] == 0
+    assert result["archived"] == 1
     assert indexer.get_status()["conversation_count"] == 2
+    assert indexer.get_status()["archived_count"] == 1
 
 
 def test_sync_detects_new_file(indexer: Indexer, fake_cascade_dir: Path):
@@ -564,6 +572,7 @@ def test_sync_default_dir(indexer: Indexer, tmp_path: Path, monkeypatch):
     result = indexer.sync()
     assert result["new"] == 1
     assert indexer.get_status()["conversation_count"] == 1
+    assert indexer.get_status()["archived_count"] == 0
 
 
 def test_sync_real_data(real_pb_dir: Path | None, tmp_path: Path):
@@ -581,3 +590,33 @@ def test_sync_real_data(real_pb_dir: Path | None, tmp_path: Path):
     assert result2["updated"] == 0
     assert result2["unchanged"] == result["new"]
     idx.close()
+
+
+def test_archived_conversation_still_searchable(indexer: Indexer, fake_cascade_dir: Path):
+    """An archived conversation remains in the database and is still searchable."""
+    from dcr.search import SearchEngine
+
+    indexer.sync(fake_cascade_dir)
+    # Archive one conversation by removing its .pb file and syncing
+    (fake_cascade_dir / "conv-aaa.pb").unlink()
+    indexer.sync(fake_cascade_dir)
+
+    # The archived conversation should still be findable via get_conversation
+    conv = indexer.get_conversation("conv-aaa")
+    assert conv is not None
+    assert conv["archived"] == 1
+
+    # The archived conversation should still appear in list_conversations
+    convs = indexer.list_conversations(limit=100)
+    archived_convs = [c for c in convs if c.get("archived")]
+    assert len(archived_convs) == 1
+    assert archived_convs[0]["cascade_id"] == "conv-aaa"
+
+    # FTS5 search should still find content from the archived conversation
+    cur = indexer.conn.execute(
+        "SELECT r.prompt FROM rounds_fts fts JOIN rounds r ON r.id = fts.rowid "
+        "WHERE rounds_fts MATCH 'protobuf' ORDER BY rank"
+    )
+    rows = cur.fetchall()
+    assert len(rows) >= 1
+    assert "protobuf" in rows[0][0].lower()

@@ -4,7 +4,7 @@
 
 - **Name**: Devin Conversations Retriever (DCR)
 - **Type**: MCP server (Python, stdio transport)
-- **Purpose**: Decrypt, index, and search Windsurf Cascade conversation histories
+- **Purpose**: Decrypt, index, and permanently archive Windsurf Cascade conversation histories. The SQLite database is a permanent archive — conversations are never deleted.
 
 ## Inventory
 
@@ -51,7 +51,7 @@ python3 -m venv .venv
 - `docs/decisions/` — ADRs for design rationale
 - `src/dcr/decrypt.py` — AES-256-GCM decryption module
 - `src/dcr/parser.py` — protobuf wire-format parser
-- `src/dcr/indexer.py` — SQLite + FTS5 indexer with sync()
+- `src/dcr/indexer.py` — SQLite + FTS5 indexer with sync() and archival (stale conversations are archived, never deleted)
 - `src/dcr/search.py` — FTS5 search engine with filters and auto-sync
 - `src/dcr/cli.py` — CLI interface with 7 subcommands
 - `artifacts/` — gitignored, contains decrypted data

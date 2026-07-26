@@ -3,6 +3,8 @@
 Provides full-text search across rounds, steps, and checkpoints
 with BM25 ranking, filters (project, date, type), and snippets.
 Auto-syncs the database before search to ensure fresh results.
+Archived conversations (whose .pb file was removed) are preserved
+and remain searchable — the database is a permanent archive.
 """
 
 from __future__ import annotations

@@ -1,44 +1,50 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-26 (export command added)
+> Last updated: 2026-07-26 (archival pérenne)
 
 ## Overview
 
 ```
-~/.codeium/windsurf/cascade/*.pb
-        │
-        ▼
-  ┌─────────────┐
-  │  decrypt.py  │  AES-256-GCM decryption
+~/.codeium/windsurf/cascade/*.pb          SQLite DB (~/.local/share/dcr/dcr.db)
+        │                                         │
+        ▼                                         │
+  ┌─────────────┐                                │
+  │  decrypt.py  │  AES-256-GCM decryption        │
   │              │  Key: safeCodeiumworldKeYsecretBalloon
-  └──────┬───────┘
-         │ plaintext protobuf bytes
-         ▼
-  ┌─────────────┐
-  │  parser.py   │  Protobuf wire-format parsing
+  └──────┬───────┘                                │
+         │ plaintext protobuf bytes                │
+         ▼                                         │
+  ┌─────────────┐                                │
+  │  parser.py   │  Protobuf wire-format parsing  │
   │              │  CortexTrajectory → steps → rounds
-  └──────┬───────┘
-         │ structured conversation data
-         ▼
-  ┌─────────────┐
-  │  indexer.py  │  SQLite + FTS5 indexing
+  └──────┬───────┘                                │
+         │ structured conversation data            │
+         ▼                                         │
+  ┌─────────────┐  ─── writes ───►                │
+  │  indexer.py  │  SQLite + FTS5 indexing        │
   │              │  conversations, rounds, steps, checkpoints
-  │              │  sync() for incremental updates
-  └──────┬───────┘
-         │ indexed DB
+  │              │  sync(): new/modified → index  │
+  │              │  missing .pb → archive (never delete)
+  └──────┬───────┘                                │
+         │ reads from DB ◄────────────────────────┘
          ▼
   ┌─────────────┐
   │  search.py   │  FTS5 full-text search (BM25)
   │              │  filters: project, date, source_table
-  │              │  auto-sync before search
+  │              │  auto-sync before search (archives stale)
   └──────┬───────┘
          │ search results
          ▼
   ┌─────────────┐
   │  cli.py      │  Command-line interface
-  │              │  sync, search, list, show, status, html
+  │              │  sync, search, list, show, export, status, html
   └─────────────┘
 ```
+
+> **Key principle**: The SQLite database is a **permanent archive**. Once a conversation
+> is indexed, it is never deleted — even if the source `.pb` file is removed by Windsurf.
+> Conversations whose `.pb` file disappears are marked `archived=1` but remain fully
+> searchable.
 
 ## Modules
 
@@ -82,14 +88,14 @@
 
 - **Database**: `~/.local/share/dcr/dcr.db` (or configurable)
 - **Tables**:
-  - `conversations`: id, cascade_id, trajectory_id, title, trajectory_type, source, project_path, git_branch, model, created_at, updated_at, step_count, round_count, checkpoint_count, pb_mtime, pb_size, indexed_at
+  - `conversations`: id, cascade_id, trajectory_id, title, trajectory_type, source, project_path, git_branch, model, created_at, updated_at, step_count, round_count, checkpoint_count, pb_mtime, pb_size, archived, archived_at, indexed_at
   - `rounds`: id, conversation_id, round_number, prompt, start_step, end_step
   - `steps`: id, conversation_id, step_index, type, status, variant_field, content_text, timestamp, model
   - `checkpoints`: id, conversation_id, step_index, checkpoint_index, user_intent, session_summary, code_change_summary, memory_summary, conversation_title, plan_snapshot, intent_only, included_step_index_start, included_step_index_end, edited_files
 - **FTS5 virtual tables**: `rounds_fts` (prompt), `steps_fts` (content_text), `checkpoints_fts` (user_intent, session_summary, code_change_summary, memory_summary, conversation_title)
 - **Triggers**: 9 auto-sync triggers (insert/delete/update on each FTS5 table)
 - **Indexes**: cascade_id, project_path, created_at, conversation_id (rounds/steps/checkpoints)
-- **Indexing strategy**: Incremental — skip files where mtime + size match existing record
+- **Indexing strategy**: Incremental — skip files where mtime + size match existing record. Conversations whose `.pb` file no longer exists are **archived** (archived=1), never deleted.
 
 ### `search.py` — Search Engine
 
@@ -107,7 +113,7 @@
 
 - **Entry point**: `dcr` (declared in `pyproject.toml`)
 - **Subcommands**:
-  - `dcr sync` — Sync database with cascade `.pb` files (incremental)
+  - `dcr sync` — Sync database with cascade `.pb` files (incremental, archives stale conversations — never deletes)
   - `dcr search <query>` — Full-text search with `-p/--project`, `-s/--source`, `-l/--limit` filters
   - `dcr list` — List conversations with `-l/--limit`, `--no-sync`
   - `dcr show <cascade_id>` — Show conversation details (supports ID prefix)
@@ -131,8 +137,8 @@
 
 ## Data Flow
 
-1. **On `dcr sync`**: Scan `~/.codeium/windsurf/cascade/*.pb`, decrypt each, parse, index in SQLite (incremental — skip unchanged)
-2. **On `dcr search`**: Auto-sync → FTS5 query across rounds/steps/checkpoints → ranked results with snippets
+1. **On `dcr sync`**: Scan `~/.codeium/windsurf/cascade/*.pb`, decrypt each, parse, index in SQLite (incremental — skip unchanged). Conversations whose `.pb` file no longer exists are **archived** (archived=1, archived_at set) — they remain in the database and stay searchable.
+2. **On `dcr search`**: Auto-sync (indexes new/modified, archives stale) → FTS5 query across rounds/steps/checkpoints → ranked results with snippets
 3. **On `dcr show`**: Fetch conversation from SQLite → display metadata, rounds, steps, checkpoints
 4. **On `dcr html`**: Auto-sync → generate sortable HTML table of all conversations
 5. **On `dcr export`**: Fetch conversation from SQLite → output structured markdown with rounds, steps (full content text), and checkpoints to stdout or file

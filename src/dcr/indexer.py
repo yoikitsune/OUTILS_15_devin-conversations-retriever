@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     checkpoint_count INTEGER DEFAULT 0,
     pb_mtime REAL DEFAULT 0,
     pb_size INTEGER DEFAULT 0,
+    archived INTEGER DEFAULT 0,
+    archived_at TEXT,
     indexed_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -158,7 +160,13 @@ CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created
 CREATE INDEX IF NOT EXISTS idx_rounds_conversation_id ON rounds(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_steps_conversation_id ON steps(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_checkpoints_conversation_id ON checkpoints(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(archived);
 """
+
+MIGRATION_SQL = [
+    "ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0",
+    "ALTER TABLE conversations ADD COLUMN archived_at TEXT",
+]
 
 
 class Indexer:
@@ -187,8 +195,13 @@ class Indexer:
         return self._conn
 
     def init_schema(self) -> None:
-        """Create database schema if not exists."""
+        """Create database schema if not exists, and run migrations."""
         self.conn.executescript(SCHEMA_SQL)
+        for stmt in MIGRATION_SQL:
+            try:
+                self.conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
         self.conn.commit()
 
     def close(self) -> None:
@@ -234,7 +247,7 @@ class Indexer:
         """Index a single parsed trajectory into the database.
 
         If a conversation with the same cascade_id already exists,
-        it is deleted and re-indexed (upsert semantics).
+        it is replaced and re-indexed (upsert semantics).
 
         Args:
             traj: Parsed TrajectoryInfo from dcr.parser.
@@ -424,21 +437,22 @@ class Indexer:
     def sync(
         self,
         cascade_dir: Path | None = None,
-        remove_stale: bool = True,
+        remove_stale: bool = False,
     ) -> dict[str, Any]:
         """Synchronize the database with the cascade directory.
 
         Scans for new/modified .pb files and indexes them.
-        Optionally removes conversations whose .pb file no longer exists.
+        Conversations whose .pb file no longer exists are marked as
+        archived (archived=1) but are NEVER deleted from the database.
 
         Args:
             cascade_dir: Directory containing .pb files.
                 If None, uses DEFAULT_CASCADE_DIR.
-            remove_stale: If True, delete conversations whose .pb file
-                no longer exists on disk.
+            remove_stale: Deprecated, ignored. Kept for backward compatibility.
+                Stale conversations are always archived, never deleted.
 
         Returns:
-            Dict with keys: new, updated, unchanged, deleted, failed, errors.
+            Dict with keys: new, updated, unchanged, archived, failed, errors.
         """
         from dcr.decrypt import decrypt_file
         from dcr.parser import parse
@@ -458,7 +472,7 @@ class Indexer:
         new = 0
         updated = 0
         unchanged = 0
-        deleted = 0
+        archived = 0
         failed = 0
         errors: list[str] = []
 
@@ -486,23 +500,23 @@ class Indexer:
                 failed += 1
                 errors.append(f"{pb_path.name}: {exc}")
 
-        # Remove stale conversations (pb file no longer exists)
-        if remove_stale:
-            stale_ids = indexed_ids - set(pb_files.keys())
-            for cascade_id in stale_ids:
-                self.conn.execute(
-                    "DELETE FROM conversations WHERE cascade_id = ?",
-                    (cascade_id,),
-                )
-                deleted += 1
-            if deleted > 0:
-                self.conn.commit()
+        # Archive conversations whose .pb file no longer exists (never delete)
+        stale_ids = indexed_ids - set(pb_files.keys())
+        for cascade_id in stale_ids:
+            self.conn.execute(
+                "UPDATE conversations SET archived = 1, archived_at = datetime('now') "
+                "WHERE cascade_id = ? AND archived = 0",
+                (cascade_id,),
+            )
+            archived += 1
+        if archived > 0:
+            self.conn.commit()
 
         return {
             "new": new,
             "updated": updated,
             "unchanged": unchanged,
-            "deleted": deleted,
+            "archived": archived,
             "failed": failed,
             "errors": errors,
         }
@@ -517,17 +531,21 @@ class Indexer:
         cur = self.conn.execute(
             """SELECT
                 (SELECT COUNT(*) FROM conversations) as conv_count,
+                (SELECT COUNT(*) FROM conversations WHERE archived = 0) as active_count,
+                (SELECT COUNT(*) FROM conversations WHERE archived = 1) as archived_count,
                 (SELECT COUNT(*) FROM steps) as step_count,
                 (SELECT COUNT(*) FROM rounds) as round_count,
                 (SELECT COUNT(*) FROM checkpoints) as cp_count"""
         )
         row = cur.fetchone()
-        conv_count, step_count, round_count, cp_count = row
+        conv_count, active_count, archived_count, step_count, round_count, cp_count = row
 
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
 
         return {
             "conversation_count": conv_count,
+            "active_count": active_count,
+            "archived_count": archived_count,
             "step_count": step_count,
             "round_count": round_count,
             "checkpoint_count": cp_count,
@@ -548,7 +566,7 @@ class Indexer:
             """SELECT id, cascade_id, trajectory_id, title,
                       step_count, round_count, checkpoint_count,
                       project_path, git_branch, model, created_at, updated_at,
-                      pb_mtime, indexed_at
+                      pb_mtime, indexed_at, archived, archived_at
                FROM conversations
                ORDER BY created_at DESC
                LIMIT ?""",
@@ -581,7 +599,8 @@ class Indexer:
             """SELECT id, cascade_id, trajectory_id, title,
                       trajectory_type, source, project_path, git_branch, model,
                       created_at, updated_at, step_count, round_count,
-                      checkpoint_count, pb_mtime, indexed_at
+                      checkpoint_count, pb_mtime, indexed_at,
+                      archived, archived_at
                FROM conversations WHERE id = ?""",
             (conv_id,),
         )

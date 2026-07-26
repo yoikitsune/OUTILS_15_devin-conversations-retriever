@@ -1,10 +1,10 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-26 (session 4 — export command)
+> Last updated: 2026-07-26 (session 5 — archival pérenne)
 
 ## Current Phase: Core Complete (M2–M6)
 
-M2–M6 complete. M7 (MCP server) deferred. All docs and README up to date.
+M2–M6 complete. M7 (MCP server) deferred. Archival pérenne des conversations implémentée — les conversations dont le .pb est supprimé sont marquées archived, jamais détruites.
 
 ## Milestones
 
@@ -92,7 +92,7 @@ If you're picking up this project in a new session:
 5. The `.venv` has all dependencies installed (`pip install -e ".[dev]"` — mcp, cryptography, protobuf, pydantic, pytest)
 6. `src/dcr/decrypt.py` is done — use `from dcr.decrypt import decrypt_file` to decrypt .pb files
 7. `src/dcr/parser.py` is done — use `from dcr.parser import parse, parse_file` to parse decrypted protobuf
-8. `src/dcr/indexer.py` is done — use `from dcr.indexer import Indexer` to store/search conversations in SQLite. `sync()` auto-detects new/modified/deleted .pb files.
+8. `src/dcr/indexer.py` is done — use `from dcr.indexer import Indexer` to store/search conversations in SQLite. `sync()` auto-detects new/modified .pb files and **archives** (never deletes) conversations whose .pb file was removed.
 9. A test conversation is already decrypted at `artifacts/decrypted/155522f6.bin`
 10. Markdown export is at `artifacts/markdown/155522f6/` (31 rounds, 697 steps)
 11. `/tmp/windsurf-decrypt/` is gone (ephemeral) — reference code is in git history and in `src/dcr/`
@@ -100,7 +100,7 @@ If you're picking up this project in a new session:
 13. DB location: `~/.local/share/dcr/dcr.db` — 50 conversations, 9161 steps, 499 rounds, 164 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
 15. Next step: M7 — MCP server (deferred per user decision — MCP vs skill discussion pending)
-16. Total tests: 114 (10 decrypt + 23 parser + 32 indexer + 24 search + 25 CLI), all passing
+16. Total tests: 116 (10 decrypt + 23 parser + 34 indexer + 24 search + 25 CLI), all passing
 17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list`, `dcr show <cascade_id>`, `dcr export <cascade_id> [-o file]`, `dcr status`, `dcr html`
 
 ## Bug History
@@ -108,3 +108,4 @@ If you're picking up this project in a new session:
 | # | Date | Description | Fix | File |
 |---|---|---|---|---|
 | B1 | 2026-07-26 | HTML overview: sorting by date columns didn't work (`parseFloat("2026-07-25")` returned `2026`, all dates sorted equally) | Added `data-sort` attribute with raw Unix timestamp on date `<td>` elements; JS sort logic checks `data-sort` first | `src/dcr/cli.py` |
+| B2 | 2026-07-26 | **Perte de données** : `sync()` supprimait les conversations dont le .pb n'existait plus sur le disque (`remove_stale=True` par défaut). L'auto-sync avant chaque recherche déclenchait cette suppression. | Ajout colonnes `archived` + `archived_at` au schéma. `sync()` fait maintenant un `UPDATE archived=1` au lieu de `DELETE`. Le paramètre `remove_stale` est déprécié (ignoré). Migration automatique des BDD existantes via `ALTER TABLE`. | `src/dcr/indexer.py` |

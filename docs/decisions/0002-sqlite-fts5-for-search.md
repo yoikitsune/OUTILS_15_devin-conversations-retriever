@@ -30,4 +30,5 @@ Use **SQLite with FTS5** (Full-Text Search 5) as the search engine.
 
 - Database file at `~/.local/share/dcr/dcr.db` (configurable via `DCR_DB_PATH` env var)
 - Incremental indexing based on file mtime to avoid full re-index on every run
+- **Permanent archive**: conversations whose `.pb` file is removed by Windsurf are marked `archived=1` but are never deleted from the database — they remain fully searchable
 - No semantic search initially — keyword/FTS only (can be extended later)

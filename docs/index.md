@@ -1,14 +1,14 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-26 (export command)
+> Last updated: 2026-07-26 (archival pérenne)
 
 ## Project
 
-**Devin Conversations Retriever (DCR)** — A CLI tool that decrypts, indexes, and enables full-text search across local Windsurf Cascade conversation histories (`.pb` files). MCP server integration planned but deferred.
+**Devin Conversations Retriever (DCR)** — A CLI tool that decrypts, indexes, and enables full-text search across local Windsurf Cascade conversation histories (`.pb` files). The SQLite database is a **permanent archive** — conversations are never deleted, even when the source `.pb` file is removed by Windsurf. MCP server integration planned but deferred.
 
 ## Why
 
-Windsurf stores conversation histories as encrypted protobuf files locally. `trajectory_search` is limited to 50 chunks per query and can't search across conversations. DCR decrypts all conversations, indexes them in SQLite FTS5, and exposes search via a CLI — enabling both AI agents and humans to find any past discussion.
+Windsurf stores conversation histories as encrypted protobuf files locally. `trajectory_search` is limited to 50 chunks per query and can't search across conversations. DCR decrypts all conversations, indexes them in a permanent SQLite FTS5 archive, and exposes search via a CLI — enabling both AI agents and humans to find any past discussion. Conversations whose `.pb` file is later removed by Windsurf are **archived, not deleted**.
 
 ## Documentation Map
 
@@ -42,14 +42,14 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 ## Verification
 
 ```bash
-# Run all tests (114 tests)
+# Run all tests (116 tests)
 .venv/bin/pytest tests/ -v
 
 # CLI usage
-.venv/bin/dcr sync       # Sync DB with cascade .pb files
-.venv/bin/dcr status     # Show DB stats
+.venv/bin/dcr sync       # Sync DB with cascade .pb files (archives stale, never deletes)
+.venv/bin/dcr status     # Show DB stats (active + archived counts)
 .venv/bin/dcr list -l 5  # List 5 most recent conversations
-.venv/bin/dcr search "protobuf"  # Full-text search
+.venv/bin/dcr search "protobuf"  # Full-text search (includes archived)
 .venv/bin/dcr show 04a36d38       # Show conversation (prefix OK)
 .venv/bin/dcr export 04a36d38     # Export conversation as markdown
 .venv/bin/dcr html                # Generate HTML overview

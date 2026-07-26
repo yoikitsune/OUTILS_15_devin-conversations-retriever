@@ -87,7 +87,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     print(f"  New:       {result['new']}")
     print(f"  Updated:   {result['updated']}")
     print(f"  Unchanged: {result['unchanged']}")
-    print(f"  Deleted:   {result['deleted']}")
+    print(f"  Archived:  {result['archived']}")
     if result["failed"]:
         print(f"  Failed:    {result['failed']}")
         for err in result["errors"][:10]:
@@ -112,8 +112,8 @@ def cmd_search(args: argparse.Namespace) -> int:
 
     if results.sync_info:
         s = results.sync_info
-        if s["new"] or s["updated"] or s["deleted"]:
-            print(f"Synced: +{s['new']} new, {s['updated']} updated, -{s['deleted']} deleted")
+        if s["new"] or s["updated"] or s["archived"]:
+            print(f"Synced: +{s['new']} new, {s['updated']} updated, {s['archived']} archived")
             print()
 
     if results.total == 0:
@@ -391,7 +391,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     print(f"Database:     {status['db_path']}")
     print(f"Size:         {status['db_size'] / 1024:.1f} KB")
-    print(f"Conversations: {status['conversation_count']}")
+    print(f"Conversations: {status['conversation_count']} ({status['active_count']} active, {status['archived_count']} archived)")
     print(f"Steps:         {status['step_count']}")
     print(f"Rounds:        {status['round_count']}")
     print(f"Checkpoints:   {status['checkpoint_count']}")

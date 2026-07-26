@@ -1,6 +1,6 @@
 # AGENTS.md — Devin Conversations Retriever
 
-> MCP server to decrypt, index, and search local Windsurf Cascade conversation histories.
+> MCP server to decrypt, index, and permanently archive local Windsurf Cascade conversation histories. The SQLite database is a permanent archive — conversations are never deleted.
 
 ## Quick Start
 
@@ -13,9 +13,9 @@ python3 -m venv .venv
 .venv/bin/devin-conversations-retriever
 
 # Decrypt + index all conversations
-# (via MCP tool or CLI)
-.venv/bin/dcr decrypt-all
-.venv/bin/dcr index
+# (via CLI)
+.venv/bin/dcr sync
+.venv/bin/dcr status
 ```
 
 ## Tech Stack
