@@ -1,6 +1,6 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-26 (session 7 — CLI UX: --project filter on list, numeric DB id on show/export)
+> Last updated: 2026-07-26 (session 8 — Fix: stable numeric IDs across re-index)
 
 ## Current Phase: Core Complete (M2–M6)
 
@@ -103,7 +103,7 @@ If you're picking up this project in a new session:
 13. DB location: `~/.local/share/dcr/dcr.db` — 50 conversations, 9161 steps, 499 rounds, 164 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
 15. Next step: M7 rejected (ADR-0004). CLI is the sole interface. Integration via Rule (discovery) + cascade-self-config (procedure). ADR-0004 documents the full decision with 21 sources.
-16. Total tests: 125 (10 decrypt + 23 parser + 37 indexer + 24 search + 31 CLI), all passing
+16. Total tests: 126 (10 decrypt + 23 parser + 38 indexer + 24 search + 31 CLI), all passing
 17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list [-p <project>]`, `dcr show <id_or_uuid>`, `dcr export <id_or_uuid> [-o file]`, `dcr status`, `dcr html`
 
 ## Bug History
@@ -113,3 +113,4 @@ If you're picking up this project in a new session:
 | B1 | 2026-07-26 | HTML overview: sorting by date columns didn't work (`parseFloat("2026-07-25")` returned `2026`, all dates sorted equally) | Added `data-sort` attribute with raw Unix timestamp on date `<td>` elements; JS sort logic checks `data-sort` first | `src/dcr/cli.py` |
 | B2 | 2026-07-26 | **Perte de données** : `sync()` supprimait les conversations dont le .pb n'existait plus sur le disque (`remove_stale=True` par défaut). L'auto-sync avant chaque recherche déclenchait cette suppression. | Ajout colonnes `archived` + `archived_at` au schéma. `sync()` fait maintenant un `UPDATE archived=1` au lieu de `DELETE`. Le paramètre `remove_stale` est déprécié (ignoré). Migration automatique des BDD existantes via `ALTER TABLE`. | `src/dcr/indexer.py` |
 | B3 | 2026-07-26 | **Migration cassée** : `CREATE INDEX idx_conversations_archived ON conversations(archived)` dans `SCHEMA_SQL` s'exécutait avant les `ALTER TABLE` de `MIGRATION_SQL`, échouant sur les DB existantes sans la colonne `archived`. | Déplacé la création de l'index `idx_conversations_archived` de `SCHEMA_SQL` vers `MIGRATION_SQL` (après les `ALTER TABLE`). | `src/dcr/indexer.py` |
+| B4 | 2026-07-26 | **IDs numériques non stables** : `index_trajectory` utilisait `DELETE` + `INSERT` pour l'upsert, ce qui changeait l'ID autoincrement à chaque re-index. Conséquence : `dcr show 145` échouait après un sync car l'ID devenait 147. Cascade tentait alors `trajectory_search` avec l'ID numérique (qui attend un UUID) → échec. | Remplacé `DELETE` + `INSERT` par `SELECT` + `UPDATE` (préserve l'ID) ou `INSERT` (si nouveau). Les lignes enfants (rounds, steps, checkpoints) sont supprimées et ré-insérées manuellement. Test de régression `test_index_trajectory_id_stable_across_reindex` ajouté. | `src/dcr/indexer.py` |

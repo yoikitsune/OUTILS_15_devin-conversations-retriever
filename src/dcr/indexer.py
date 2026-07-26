@@ -247,7 +247,8 @@ class Indexer:
         """Index a single parsed trajectory into the database.
 
         If a conversation with the same cascade_id already exists,
-        it is replaced and re-indexed (upsert semantics).
+        it is updated in-place (preserving its numeric ID) and its
+        child rows (rounds, steps, checkpoints) are replaced.
 
         Args:
             traj: Parsed TrajectoryInfo from dcr.parser.
@@ -256,42 +257,78 @@ class Indexer:
             pb_size: Size of the source .pb file.
 
         Returns:
-            The conversation_id (rowid) of the indexed conversation.
+            The conversation_id (numeric primary key) of the indexed conversation.
         """
         self.init_schema()
 
-        # Delete existing conversation if any (cascade will clean child rows)
-        self.conn.execute(
-            "DELETE FROM conversations WHERE cascade_id = ?",
+        # Check if conversation already exists (preserve stable numeric ID)
+        cur = self.conn.execute(
+            "SELECT id FROM conversations WHERE cascade_id = ?",
             (cascade_id,),
         )
-
-        # Insert conversation
-        cur = self.conn.execute(
-            """INSERT INTO conversations
-               (cascade_id, trajectory_id, title, trajectory_type, source,
-                project_path, git_branch, model, created_at, updated_at,
-                step_count, round_count, checkpoint_count, pb_mtime, pb_size)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                cascade_id,
-                traj.trajectory_id,
-                traj.title,
-                traj.trajectory_type,
-                traj.source,
-                traj.project_path,
-                traj.git_branch,
-                traj.model,
-                traj.created_at,
-                traj.updated_at,
-                traj.step_count,
-                traj.round_count,
-                len(traj.checkpoints),
-                pb_mtime,
-                pb_size,
-            ),
-        )
-        conv_id = cur.lastrowid
+        row = cur.fetchone()
+        if row is not None:
+            conv_id = row[0]
+            # Update existing row, preserving the autoincrement ID
+            self.conn.execute(
+                """UPDATE conversations SET
+                   trajectory_id = ?, title = ?, trajectory_type = ?, source = ?,
+                   project_path = ?, git_branch = ?, model = ?,
+                   created_at = ?, updated_at = ?,
+                   step_count = ?, round_count = ?, checkpoint_count = ?,
+                   pb_mtime = ?, pb_size = ?,
+                   archived = 0, archived_at = NULL,
+                   indexed_at = datetime('now')
+                   WHERE id = ?""",
+                (
+                    traj.trajectory_id,
+                    traj.title,
+                    traj.trajectory_type,
+                    traj.source,
+                    traj.project_path,
+                    traj.git_branch,
+                    traj.model,
+                    traj.created_at,
+                    traj.updated_at,
+                    traj.step_count,
+                    traj.round_count,
+                    len(traj.checkpoints),
+                    pb_mtime,
+                    pb_size,
+                    conv_id,
+                ),
+            )
+            # Delete old child rows (triggers will clean FTS5 entries)
+            self.conn.execute("DELETE FROM rounds WHERE conversation_id = ?", (conv_id,))
+            self.conn.execute("DELETE FROM steps WHERE conversation_id = ?", (conv_id,))
+            self.conn.execute("DELETE FROM checkpoints WHERE conversation_id = ?", (conv_id,))
+        else:
+            # Insert new conversation
+            cur = self.conn.execute(
+                """INSERT INTO conversations
+                   (cascade_id, trajectory_id, title, trajectory_type, source,
+                    project_path, git_branch, model, created_at, updated_at,
+                    step_count, round_count, checkpoint_count, pb_mtime, pb_size)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    cascade_id,
+                    traj.trajectory_id,
+                    traj.title,
+                    traj.trajectory_type,
+                    traj.source,
+                    traj.project_path,
+                    traj.git_branch,
+                    traj.model,
+                    traj.created_at,
+                    traj.updated_at,
+                    traj.step_count,
+                    traj.round_count,
+                    len(traj.checkpoints),
+                    pb_mtime,
+                    pb_size,
+                ),
+            )
+            conv_id = cur.lastrowid
 
         # Insert rounds
         for rnd in traj.rounds:

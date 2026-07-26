@@ -221,6 +221,35 @@ def test_index_trajectory_upsert(indexer: Indexer, sample_trajectory: Trajectory
     assert cur.fetchone()[0] == 4  # now 4 steps
 
 
+def test_index_trajectory_id_stable_across_reindex(indexer: Indexer, sample_trajectory: TrajectoryInfo):
+    """Re-indexing the same cascade_id preserves the numeric ID (regression test).
+
+    Previously, index_trajectory used DELETE+INSERT which caused the
+    autoincrement ID to change on every re-index. This test verifies
+    that the ID stays stable, which is critical for `dcr show <id>`
+    and `dcr export <id>` to work reliably across syncs.
+    """
+    conv_id1 = indexer.index_trajectory(
+        sample_trajectory, cascade_id="c1", pb_mtime=1000.0, pb_size=5000
+    )
+    # Simulate a modified .pb file (different mtime/size, new step)
+    sample_trajectory.steps.append(StepInfo(index=3, variant_field=20, content_text="new"))
+    conv_id2 = indexer.index_trajectory(
+        sample_trajectory, cascade_id="c1", pb_mtime=2000.0, pb_size=6000
+    )
+
+    assert conv_id1 == conv_id2, (
+        f"Numeric ID changed from {conv_id1} to {conv_id2} after re-index. "
+        "IDs must be stable across syncs."
+    )
+
+    # Verify content was actually updated
+    cur = indexer.conn.execute("SELECT step_count, pb_mtime FROM conversations WHERE id = ?", (conv_id1,))
+    row = cur.fetchone()
+    assert row[0] == 4  # new step count
+    assert row[1] == 2000.0  # new mtime
+
+
 # --- FTS5 tests ---
 
 
