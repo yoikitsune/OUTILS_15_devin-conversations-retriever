@@ -1,6 +1,6 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-26 (archival pérenne)
+> Last updated: 2026-07-26 (CLI UX improvements)
 
 ## Overview
 
@@ -116,9 +116,9 @@
 - **Subcommands**:
   - `dcr sync` — Sync database with cascade `.pb` files (incremental, archives stale conversations — never deletes)
   - `dcr search <query>` — Full-text search with `-p/--project`, `-s/--source`, `-l/--limit` filters
-  - `dcr list` — List conversations with `-l/--limit`, `--no-sync`
-  - `dcr show <cascade_id>` — Show conversation details (supports ID prefix)
-  - `dcr export <cascade_id>` — Export conversation as structured markdown (rounds → steps with full content, checkpoints). Supports `-o/--output` for file output and ID prefix.
+  - `dcr list` — List conversations with `-l/--limit`, `-p/--project` (exact or prefix match), `--no-sync`
+  - `dcr show <cascade_id>` — Show conversation details (supports UUID prefix or numeric DB id)
+  - `dcr export <cascade_id>` — Export conversation as structured markdown (rounds → steps with full content, checkpoints). Supports `-o/--output` for file output, UUID prefix, or numeric DB id.
   - `dcr status` — Database statistics
   - `dcr html` — Generate sortable HTML overview (`-o/--output`), date columns use `data-sort` attribute with Unix timestamp for correct numeric sorting
 - **Auto-sync**: Enabled by default for `search`, `list`, `html` (disable with `--no-sync`)

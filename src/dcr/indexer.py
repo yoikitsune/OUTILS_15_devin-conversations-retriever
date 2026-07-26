@@ -553,25 +553,41 @@ class Indexer:
             "db_size": db_size,
         }
 
-    def list_conversations(self, limit: int = 50) -> list[dict[str, Any]]:
+    def list_conversations(
+        self, limit: int = 50, project: str | None = None
+    ) -> list[dict[str, Any]]:
         """List indexed conversations.
 
         Args:
             limit: Maximum number of conversations to return.
+            project: If given, filter by project path (exact or prefix match).
 
         Returns:
             List of dicts with conversation metadata.
         """
-        cur = self.conn.execute(
-            """SELECT id, cascade_id, trajectory_id, title,
-                      step_count, round_count, checkpoint_count,
-                      project_path, git_branch, model, created_at, updated_at,
-                      pb_mtime, indexed_at, archived, archived_at
-               FROM conversations
-               ORDER BY created_at DESC
-               LIMIT ?""",
-            (limit,),
-        )
+        if project:
+            cur = self.conn.execute(
+                """SELECT id, cascade_id, trajectory_id, title,
+                          step_count, round_count, checkpoint_count,
+                          project_path, git_branch, model, created_at, updated_at,
+                          pb_mtime, indexed_at, archived, archived_at
+                   FROM conversations
+                   WHERE project_path = ? OR project_path LIKE ?
+                   ORDER BY created_at DESC
+                   LIMIT ?""",
+                (project, project + "/%", limit),
+            )
+        else:
+            cur = self.conn.execute(
+                """SELECT id, cascade_id, trajectory_id, title,
+                          step_count, round_count, checkpoint_count,
+                          project_path, git_branch, model, created_at, updated_at,
+                          pb_mtime, indexed_at, archived, archived_at
+                   FROM conversations
+                   ORDER BY created_at DESC
+                   LIMIT ?""",
+                (limit,),
+            )
         columns = [d[0] for d in cur.description]
         return [dict(zip(columns, row)) for row in cur.fetchall()]
 
@@ -592,7 +608,36 @@ class Indexer:
         row = cur.fetchone()
         if row is None:
             return None
-        conv_id = row[0]
+        return self._fetch_conversation(row[0])
+
+    def get_conversation_by_db_id(self, db_id: int) -> dict[str, Any] | None:
+        """Get a conversation by its numeric database ID.
+
+        Args:
+            db_id: The numeric ID (autoincrement primary key).
+
+        Returns:
+            Dict with conversation metadata and nested rounds, steps, checkpoints.
+            None if not found.
+        """
+        cur = self.conn.execute(
+            "SELECT id FROM conversations WHERE id = ?",
+            (db_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return self._fetch_conversation(row[0])
+
+    def _fetch_conversation(self, conv_id: int) -> dict[str, Any] | None:
+        """Fetch full conversation data by numeric ID."""
+        cur = self.conn.execute(
+            "SELECT id FROM conversations WHERE id = ?",
+            (conv_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
 
         # Conversation metadata
         cur = self.conn.execute(

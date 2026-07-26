@@ -331,6 +331,41 @@ def test_list_conversations_limit(indexer: Indexer, sample_trajectory: Trajector
     assert len(convs) == 3
 
 
+def test_list_conversations_project_filter(indexer: Indexer, sample_trajectory: TrajectoryInfo):
+    """list_conversations filters by project path."""
+    sample_trajectory.project_path = "/home/user/projects/alpha"
+    indexer.index_trajectory(sample_trajectory, cascade_id="c1")
+    sample_trajectory.project_path = "/home/user/projects/beta"
+    indexer.index_trajectory(sample_trajectory, cascade_id="c2")
+
+    convs = indexer.list_conversations(project="/home/user/projects/alpha")
+    assert len(convs) == 1
+    assert convs[0]["cascade_id"] == "c1"
+
+    # Prefix match: parent dir should match both
+    convs = indexer.list_conversations(project="/home/user/projects")
+    assert len(convs) == 2
+
+    # No match
+    convs = indexer.list_conversations(project="/nonexistent")
+    assert len(convs) == 0
+
+
+def test_get_conversation_by_db_id(indexer: Indexer, sample_trajectory: TrajectoryInfo):
+    """get_conversation_by_db_id returns full nested data."""
+    conv_id = indexer.index_trajectory(sample_trajectory, cascade_id="c1")
+    conv = indexer.get_conversation_by_db_id(conv_id)
+    assert conv is not None
+    assert conv["cascade_id"] == "c1"
+    assert len(conv["rounds"]) == 1
+    assert len(conv["steps"]) == 3
+
+
+def test_get_conversation_by_db_id_not_found(indexer: Indexer):
+    """get_conversation_by_db_id returns None for unknown id."""
+    assert indexer.get_conversation_by_db_id(99999) is None
+
+
 # --- get_conversation tests ---
 
 

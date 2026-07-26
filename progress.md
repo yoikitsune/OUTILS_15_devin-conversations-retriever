@@ -1,6 +1,6 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-26 (session 6 — ADR-0004 + intégration cascade-self-config)
+> Last updated: 2026-07-26 (session 7 — CLI UX: --project filter on list, numeric DB id on show/export)
 
 ## Current Phase: Core Complete (M2–M6)
 
@@ -15,7 +15,7 @@ M2–M6 complete. M7 (MCP server) rejected (ADR-0004). Intégration Cascade via 
 | M3 | Protobuf parser (`parser.py`) + tests | Completed | 2026-07-26 — wire-format parser, 4 dataclasses, text extraction, round grouping, 23 tests, validated on real .bin |
 | M4 | SQLite FTS5 indexer (`indexer.py`) + tests | Completed | 2026-07-26 — 4 tables + 3 FTS5 + 9 triggers, enriched fields (project, branch, model, timestamps, title), sync() for incremental updates, 32 tests, validated on real .pb |
 | M5 | Search engine (`search.py`) + tests | Completed | 2026-07-26 — FTS5 BM25 search, filters (project, date, source_table), snippets, auto-sync, search_conversations dedup, 24 tests |
-| M6 | CLI interface (`dcr`) + tests | Completed | 2026-07-26 — 7 subcommands (sync, search, list, show, export, status, html), auto-sync, prefix resolution, 25 tests |
+| M6 | CLI interface (`dcr`) + tests | Completed | 2026-07-26 — 7 subcommands (sync, search, list, show, export, status, html), auto-sync, prefix resolution, numeric DB id, --project filter on list, 31 tests |
 | M7 | MCP server (`server.py`) + tests | Rejected | CLI over MCP — voir ADR-0004. Coût token permanent pour usage occasionnel, 0/9 critères favorables au MCP |
 
 > Tests are integrated into each milestone (M2–M7), not a separate milestone.
@@ -71,7 +71,10 @@ M2–M6 complete. M7 (MCP server) rejected (ADR-0004). Intégration Cascade via 
 - [x] M6: Cascade ID prefix resolution for show command
 - [x] M6: HTML generation with sortable table
 - [x] M6: Entry point `dcr` declared in pyproject.toml
-- [x] M6: `tests/test_cli.py` — 25 tests (all subcommands, filters, prefix, export, empty DB, real data)
+- [x] M6: `tests/test_cli.py` — 31 tests (all subcommands, filters, prefix, numeric DB id, export, empty DB, real data)
+- [x] M6 fix: `dcr list -p/--project` filter (exact + prefix match on project_path)
+- [x] M6 fix: `dcr show/export` accept numeric DB id (resolves to cascade_id internally)
+- [x] M6 fix: `Indexer.list_conversations(project=)` and `Indexer.get_conversation_by_db_id()` added
 
 ## What's In Progress
 
@@ -100,8 +103,8 @@ If you're picking up this project in a new session:
 13. DB location: `~/.local/share/dcr/dcr.db` — 50 conversations, 9161 steps, 499 rounds, 164 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
 15. Next step: M7 rejected (ADR-0004). CLI is the sole interface. Integration via Rule (discovery) + cascade-self-config (procedure). ADR-0004 documents the full decision with 21 sources.
-16. Total tests: 116 (10 decrypt + 23 parser + 34 indexer + 24 search + 25 CLI), all passing
-17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list`, `dcr show <cascade_id>`, `dcr export <cascade_id> [-o file]`, `dcr status`, `dcr html`
+16. Total tests: 125 (10 decrypt + 23 parser + 37 indexer + 24 search + 31 CLI), all passing
+17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list [-p <project>]`, `dcr show <id_or_uuid>`, `dcr export <id_or_uuid> [-o file]`, `dcr status`, `dcr html`
 
 ## Bug History
 

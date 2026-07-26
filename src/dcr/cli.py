@@ -146,7 +146,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     idx.init_schema()
     if not args.no_sync:
         idx.sync()
-    convs = idx.list_conversations(limit=args.limit)
+    convs = idx.list_conversations(limit=args.limit, project=args.project)
     idx.close()
 
     if not convs:
@@ -552,19 +552,20 @@ def build_parser() -> argparse.ArgumentParser:
     # list
     p_list = subparsers.add_parser("list", help="List indexed conversations")
     p_list.add_argument("-l", "--limit", type=int, default=50, help="Max conversations (default: 50)")
+    p_list.add_argument("-p", "--project", default=None, help="Filter by project path (exact or prefix)")
     p_list.add_argument("--no-sync", action="store_true", help="Skip auto-sync before listing")
     p_list.set_defaults(func=cmd_list)
 
     # show
     p_show = subparsers.add_parser("show", help="Show a specific conversation")
-    p_show.add_argument("cascade_id", help="Cascade UUID (or prefix)")
+    p_show.add_argument("cascade_id", help="Cascade UUID, prefix, or numeric DB id")
     p_show.add_argument("--steps", type=int, default=20, help="Max steps to display (default: 20)")
     p_show.add_argument("--no-sync", action="store_true", help="Skip auto-sync before showing")
     p_show.set_defaults(func=cmd_show)
 
     # export
     p_export = subparsers.add_parser("export", help="Export a conversation as structured markdown")
-    p_export.add_argument("cascade_id", help="Cascade UUID (or prefix)")
+    p_export.add_argument("cascade_id", help="Cascade UUID, prefix, or numeric DB id")
     p_export.add_argument("-o", "--output", default=None, help="Output file path (default: stdout)")
     p_export.add_argument("--no-sync", action="store_true", help="Skip auto-sync before exporting")
     p_export.set_defaults(func=cmd_export)
@@ -592,14 +593,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
 
-    # Resolve cascade_id prefix for show/export commands
+    # Resolve cascade_id for show/export commands
     if args.command in ("show", "export"):
         idx = Indexer(db_path=args.db_path)
         idx.init_schema()
         if not args.no_sync:
             idx.sync()
-        if not idx.get_conversation(args.cascade_id):
-            # Try prefix match
+        # Try numeric DB id first
+        if args.cascade_id.isdigit():
+            conv = idx.get_conversation_by_db_id(int(args.cascade_id))
+            if conv:
+                args.cascade_id = conv["cascade_id"]
+                idx.close()
+            else:
+                idx.close()
+                print(f"Conversation with DB id '{args.cascade_id}' not found.")
+                return 1
+        elif not idx.get_conversation(args.cascade_id):
+            # Try prefix match on cascade_id
             cur = idx.conn.execute(
                 "SELECT cascade_id FROM conversations WHERE cascade_id LIKE ?",
                 (args.cascade_id + "%",),

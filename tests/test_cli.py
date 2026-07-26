@@ -127,6 +127,55 @@ def test_cli_list_empty(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     assert "No conversations" in out
 
 
+def test_cli_list_with_project_filter(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """list with -p filters by project path."""
+    ret = main(["--db", str(db_path), "list", "-p", "/home/user/projects/myapp", "--no-sync"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "myapp" in out
+
+
+def test_cli_list_with_project_filter_no_match(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """list with -p and no matching project shows empty message."""
+    ret = main(["--db", str(db_path), "list", "-p", "/nonexistent/project", "--no-sync"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "No conversations" in out
+
+
+def test_cli_show_by_numeric_id(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """show accepts numeric DB id."""
+    idx = Indexer(db_path=db_path)
+    convs = idx.list_conversations()
+    idx.close()
+    db_id = convs[0]["id"]
+    ret = main(["--db", str(db_path), "show", str(db_id), "--no-sync"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Conversation:" in out
+    assert "cascade-001" in out
+
+
+def test_cli_show_numeric_id_not_found(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """show with non-existent numeric DB id returns error."""
+    ret = main(["--db", str(db_path), "show", "99999", "--no-sync"])
+    assert ret == 1
+    out = capsys.readouterr().out
+    assert "not found" in out
+
+
+def test_cli_export_by_numeric_id(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """export accepts numeric DB id."""
+    idx = Indexer(db_path=db_path)
+    convs = idx.list_conversations()
+    idx.close()
+    db_id = convs[0]["id"]
+    ret = main(["--db", str(db_path), "export", str(db_id), "--no-sync"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "cascade-001" in out
+
+
 def test_cli_search(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """search command returns results."""
     ret = main(["--db", str(db_path), "search", "protobuf", "--no-sync"])

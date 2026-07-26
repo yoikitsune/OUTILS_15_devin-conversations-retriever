@@ -36,9 +36,9 @@ python3 -m venv .venv
 # CLI
 .venv/bin/dcr sync
 .venv/bin/dcr search "query"
-.venv/bin/dcr list
-.venv/bin/dcr show <cascade_id>
-.venv/bin/dcr export <cascade_id> [-o file]
+.venv/bin/dcr list [-p <project>]
+.venv/bin/dcr show <id_or_uuid>
+.venv/bin/dcr export <id_or_uuid> [-o file]
 .venv/bin/dcr status
 .venv/bin/dcr html
 ```

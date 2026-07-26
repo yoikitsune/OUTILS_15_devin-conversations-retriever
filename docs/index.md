@@ -1,6 +1,6 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-26 (archival pérenne)
+> Last updated: 2026-07-26 (CLI UX improvements)
 
 ## Project
 
@@ -43,15 +43,16 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 ## Verification
 
 ```bash
-# Run all tests (116 tests)
+# Run all tests (125 tests)
 .venv/bin/pytest tests/ -v
 
 # CLI usage
 .venv/bin/dcr sync       # Sync DB with cascade .pb files (archives stale, never deletes)
 .venv/bin/dcr status     # Show DB stats (active + archived counts)
 .venv/bin/dcr list -l 5  # List 5 most recent conversations
+.venv/bin/dcr list -p /path/to/project  # Filter by project path
 .venv/bin/dcr search "protobuf"  # Full-text search (includes archived)
-.venv/bin/dcr show 04a36d38       # Show conversation (prefix OK)
+.venv/bin/dcr show 04a36d38       # Show conversation (UUID prefix or numeric DB id)
 .venv/bin/dcr export 04a36d38     # Export conversation as markdown
 .venv/bin/dcr html                # Generate HTML overview
 ```
