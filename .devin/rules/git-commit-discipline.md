@@ -12,5 +12,6 @@ Regles :
 3. **Tests avant commit** : `pytest tests/test_<module>.py -v` doit passer avant de commit
 4. **Message de commit** : format `feat(<scope>): <description courte>` ou `fix(<scope>): <description>`
 5. **Pas de commit en bloc** : si plusieurs milestones sont termines en meme temps, faire des commits separens dans l'ordre chronologique
-6. **Docs dans le commit du milestone** : les updates de `progress.md`, `docs/architecture.md`, etc. font partie du commit du milestone correspondant
+6. **Chacun commit ses propres modifications** : ne jamais committer les changements d'un autre contributeur dans son propre commit — utiliser `git add -p` ou `git stash` pour isoler ses hunks
+7. **Docs dans le commit du milestone** : les updates de `progress.md`, `docs/architecture.md`, etc. font partie du commit du milestone correspondant
 </git_commit_discipline>

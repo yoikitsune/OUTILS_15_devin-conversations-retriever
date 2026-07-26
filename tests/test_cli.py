@@ -102,7 +102,7 @@ def test_cli_no_command(capsys: pytest.CaptureFixture[str]):
 
 def test_cli_status(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """status command shows database stats."""
-    ret = main(["--db", str(db_path), "status"])
+    ret = main(["--db", str(db_path), "status", "--no-sync"])
     assert ret == 0
     out = capsys.readouterr().out
     assert "Conversations:" in out
@@ -184,7 +184,7 @@ def test_cli_search_source_filter(db_path: Path, capsys: pytest.CaptureFixture[s
 
 def test_cli_show(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """show command displays conversation details."""
-    ret = main(["--db", str(db_path), "show", "cascade-001"])
+    ret = main(["--db", str(db_path), "show", "cascade-001", "--no-sync"])
     assert ret == 0
     out = capsys.readouterr().out
     assert "Conversation:" in out
@@ -196,7 +196,7 @@ def test_cli_show(db_path: Path, capsys: pytest.CaptureFixture[str]):
 
 def test_cli_show_not_found(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """show with unknown ID returns error."""
-    ret = main(["--db", str(db_path), "show", "nonexistent-id"])
+    ret = main(["--db", str(db_path), "show", "nonexistent-id", "--no-sync"])
     assert ret == 1
     out = capsys.readouterr().out
     assert "not found" in out
@@ -204,7 +204,7 @@ def test_cli_show_not_found(db_path: Path, capsys: pytest.CaptureFixture[str]):
 
 def test_cli_show_prefix(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """show with cascade_id prefix resolves to full ID."""
-    ret = main(["--db", str(db_path), "show", "cascade"])
+    ret = main(["--db", str(db_path), "show", "cascade", "--no-sync"])
     assert ret == 0
     out = capsys.readouterr().out
     assert "cascade-001" in out
@@ -292,7 +292,7 @@ def test_cli_html_real(real_db: Path | None, tmp_path: Path, capsys: pytest.Capt
 
 def test_cli_export(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """export command outputs structured markdown to stdout."""
-    ret = main(["--db", str(db_path), "export", "cascade-001"])
+    ret = main(["--db", str(db_path), "export", "cascade-001", "--no-sync"])
     assert ret == 0
     out = capsys.readouterr().out
     assert "# " in out
@@ -308,7 +308,7 @@ def test_cli_export(db_path: Path, capsys: pytest.CaptureFixture[str]):
 def test_cli_export_to_file(db_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     """export with -o writes markdown to file."""
     out_file = tmp_path / "export" / "conv.md"
-    ret = main(["--db", str(db_path), "export", "cascade-001", "-o", str(out_file)])
+    ret = main(["--db", str(db_path), "export", "cascade-001", "-o", str(out_file), "--no-sync"])
     assert ret == 0
     assert out_file.exists()
     content = out_file.read_text(encoding="utf-8")
@@ -321,7 +321,7 @@ def test_cli_export_to_file(db_path: Path, tmp_path: Path, capsys: pytest.Captur
 
 def test_cli_export_not_found(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """export with unknown ID returns error."""
-    ret = main(["--db", str(db_path), "export", "nonexistent-id"])
+    ret = main(["--db", str(db_path), "export", "nonexistent-id", "--no-sync"])
     assert ret == 1
     out = capsys.readouterr().out
     assert "not found" in out
@@ -329,7 +329,7 @@ def test_cli_export_not_found(db_path: Path, capsys: pytest.CaptureFixture[str])
 
 def test_cli_export_prefix(db_path: Path, capsys: pytest.CaptureFixture[str]):
     """export with cascade_id prefix resolves to full ID."""
-    ret = main(["--db", str(db_path), "export", "cascade"])
+    ret = main(["--db", str(db_path), "export", "cascade", "--no-sync"])
     assert ret == 0
     out = capsys.readouterr().out
     assert "cascade-001" in out
@@ -346,7 +346,7 @@ def test_cli_export_real(real_db: Path | None, capsys: pytest.CaptureFixture[str
     if not convs:
         pytest.skip("No conversations in real DB")
     cascade_id = convs[0]["cascade_id"]
-    ret = main(["--db", str(real_db), "export", cascade_id])
+    ret = main(["--db", str(real_db), "export", cascade_id, "--no-sync"])
     assert ret == 0
     out = capsys.readouterr().out
     assert "# " in out

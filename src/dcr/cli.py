@@ -173,6 +173,9 @@ def cmd_list(args: argparse.Namespace) -> int:
 def cmd_show(args: argparse.Namespace) -> int:
     """Show a specific conversation."""
     idx = Indexer(db_path=args.db_path)
+    idx.init_schema()
+    if not args.no_sync:
+        idx.sync()
     conv = idx.get_conversation(args.cascade_id)
     idx.close()
 
@@ -229,6 +232,9 @@ def cmd_show(args: argparse.Namespace) -> int:
 def cmd_export(args: argparse.Namespace) -> int:
     """Export a conversation as structured markdown."""
     idx = Indexer(db_path=args.db_path)
+    idx.init_schema()
+    if not args.no_sync:
+        idx.sync()
     conv = idx.get_conversation(args.cascade_id)
     idx.close()
 
@@ -377,6 +383,9 @@ def cmd_export(args: argparse.Namespace) -> int:
 def cmd_status(args: argparse.Namespace) -> int:
     """Show database status."""
     idx = Indexer(db_path=args.db_path)
+    idx.init_schema()
+    if not args.no_sync:
+        idx.sync()
     status = idx.get_status()
     idx.close()
 
@@ -550,16 +559,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_show = subparsers.add_parser("show", help="Show a specific conversation")
     p_show.add_argument("cascade_id", help="Cascade UUID (or prefix)")
     p_show.add_argument("--steps", type=int, default=20, help="Max steps to display (default: 20)")
+    p_show.add_argument("--no-sync", action="store_true", help="Skip auto-sync before showing")
     p_show.set_defaults(func=cmd_show)
 
     # export
     p_export = subparsers.add_parser("export", help="Export a conversation as structured markdown")
     p_export.add_argument("cascade_id", help="Cascade UUID (or prefix)")
     p_export.add_argument("-o", "--output", default=None, help="Output file path (default: stdout)")
+    p_export.add_argument("--no-sync", action="store_true", help="Skip auto-sync before exporting")
     p_export.set_defaults(func=cmd_export)
 
     # status
     p_status = subparsers.add_parser("status", help="Show database status")
+    p_status.add_argument("--no-sync", action="store_true", help="Skip auto-sync before showing status")
     p_status.set_defaults(func=cmd_status)
 
     # html
@@ -583,6 +595,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Resolve cascade_id prefix for show/export commands
     if args.command in ("show", "export"):
         idx = Indexer(db_path=args.db_path)
+        idx.init_schema()
+        if not args.no_sync:
+            idx.sync()
         if not idx.get_conversation(args.cascade_id):
             # Try prefix match
             cur = idx.conn.execute(
