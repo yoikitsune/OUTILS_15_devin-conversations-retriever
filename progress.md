@@ -1,10 +1,10 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-31 (M8 Phase 3 completed — schema resilience, 208 tests passing)
+> Last updated: 2026-07-31 (M8 Phase 4 completed — @conversation skill, 220 tests passing)
 
-## Current Phase: M8 Phase 3 Completed — Schema Resilience
+## Current Phase: M8 Phase 4 Completed — @conversation Skill
 
-M2–M6 complete. M7 (MCP server) rejected (ADR-0004). **M8 Phase 1A** (Devin Local MVP), **Phase 2** (enrichment), **Phase 3** (schema resilience) all completed. Phase 3: `dcr status` displays detected vs known schema version, `scripts/check_devin_schema.py` standalone checker (tables, columns, JSON keys, exit codes 0/1/2), `tests/test_schema_compat.py` (17 tests, CI tripwire `test_real_schema_version_matches_known`), ADR-0006 (compatibility strategy — additive migrations = bump constant, breaking = update code). Phase 1B **annulée**. Phase 4 (`@conversation` skill) pending.
+M2–M6 complete. M7 (MCP server) rejected (ADR-0004). **M8 Phase 1A** (Devin Local MVP), **Phase 2** (enrichment), **Phase 3** (schema resilience), **Phase 4** (`@conversation` skill) all completed. Phase 4: `.devin/skills/dcr-conversation/SKILL.md` (procédure de retrieval + injection de contexte, 4 étapes, exemples), `global_rules.md` mis à jour (référence au skill + filtres Phase 2), `tests/test_skill_conversation.py` (12 tests de cohérence documentation). **M8 est complet** — toutes les phases prévues sont done (1B annulée). 220 tests total.
 
 ## Milestones
 
@@ -17,7 +17,7 @@ M2–M6 complete. M7 (MCP server) rejected (ADR-0004). **M8 Phase 1A** (Devin Lo
 | M5 | Search engine (`search.py`) + tests | Completed | 2026-07-26 — FTS5 BM25 search, filters (project, date, source_table), snippets, auto-sync, search_conversations dedup, 24 tests |
 | M6 | CLI interface (`dcr`) + tests | Completed | 2026-07-26 — 7 subcommands (sync, search, list, show, export, status, html), auto-sync, prefix resolution, numeric DB id, --project filter on list, 31 tests |
 | M7 | MCP server (`server.py`) + tests | Rejected | CLI over MCP — voir ADR-0004. Coût token permanent pour usage occasionnel, 0/9 critères favorables au MCP |
-| M8 | Devin Local integration (Phase 1A) + Cascade enrichment (Phase 1B, cancelled) + Enrichment (Phase 2) + Schema resilience (Phase 3) | Phase 1A + 2 + 3 Completed | 2026-07-31 — Phase 1A: `devin_local.py`, schéma unifié, sync() auto-dispatch, 53 tests. Phase 2: `tool_calls` table + FTS5, `--source-type`, `--full-tree`, thinking/tool_calls display, 14 tests. Phase 3: `dcr status` schema version, `check_devin_schema.py`, `test_schema_compat.py` (17 tests, CI tripwire), ADR-0006. 208 tests total. Phase 1B **annulée**. Phase 4: skill @conversation |
+| M8 | Devin Local integration (Phase 1A) + Cascade enrichment (Phase 1B, cancelled) + Enrichment (Phase 2) + Schema resilience (Phase 3) + @conversation skill (Phase 4) | **Completed** | 2026-07-31 — Phase 1A: `devin_local.py`, schéma unifié, sync() auto-dispatch, 53 tests. Phase 2: `tool_calls` table + FTS5, `--source-type`, `--full-tree`, thinking/tool_calls display, 14 tests. Phase 3: `dcr status` schema version, `check_devin_schema.py`, `test_schema_compat.py` (17 tests, CI tripwire), ADR-0006. Phase 4: `@conversation` skill (`dcr-conversation/SKILL.md`), `global_rules.md` update, 12 tests. **220 tests total**. Phase 1B **annulée**. **M8 complet.** |
 
 > Tests are integrated into each milestone (M2–M7), not a separate milestone.
 
@@ -79,7 +79,7 @@ M2–M6 complete. M7 (MCP server) rejected (ADR-0004). **M8 Phase 1A** (Devin Lo
 
 ## What's In Progress
 
-Nothing currently in progress. M8 Phase 3 completed. Phase 4 (`@conversation` skill) pending — awaiting user decision.
+Nothing currently in progress. **M8 is complete** — all planned phases done (1A, 2, 3, 4; 1B cancelled). 220 tests passing.
 
 ## What's Blocked
 
@@ -135,12 +135,13 @@ Small, self-contained. Does NOT touch the Cascade parser — zero risk to the 12
 | 3.3 `tests/test_schema_compat.py` — 17 tests, CI tripwire `test_real_schema_version_matches_known` | Done |
 | 3.4 ADR-0006: compatibility strategy (additive = bump constant, breaking = update code) | Done |
 
-### Phase 4: `@conversation` skill (recover lost Cascade feature)
+### Phase 4: `@conversation` skill (completed 2026-07-31)
 
 | Task | Status |
 |---|---|
-| 4.1 Skill `.devin/skills/dcr-conversation/SKILL.md` | Pending |
-| 4.2 Global rule update | Pending |
+| 4.1 `.devin/skills/dcr-conversation/SKILL.md` — procédure de retrieval + injection (4 étapes, exemples, commandes, limites) | Done |
+| 4.2 `global_rules.md` — référence au skill + filtres Phase 2 (`--source-type`, `--full-tree`, `-s tool_calls`) | Done |
+| 4.3 `tests/test_skill_conversation.py` — 12 tests de cohérence documentation (frontmatter, commandes, filtres, exemples) | Done |
 
 ## AI Handoff Notes
 
@@ -161,11 +162,11 @@ If you're picking up this project in a new session:
 13. DB location: `~/.local/share/dcr/dcr.db` — 216 conversations (112 cascade + 104 devin_local), 25917 steps, 1141 rounds, 3075 checkpoints
 14. HTML overview: `~/.local/share/dcr/conversations.html`
 15. **M8 Phase 1A completed** — `devin_local.py` reader (full-tree, `on_main_chain`, compaction checkpoints), unified schema (`source_type` + tree columns), `sync()` auto-dispatch, CLI per-source display. See M8 section above and `docs/decisions/0005-unified-schema-devin-local.md`.
-16. Total tests: 208 (10 decrypt + 23 parser + 38 indexer + 26 search + 36 CLI + 32 devin_local + 27 indexer_devin_local + 17 schema_compat), all passing
+16. Total tests: 220 (10 decrypt + 23 parser + 38 indexer + 26 search + 36 CLI + 32 devin_local + 27 indexer_devin_local + 17 schema_compat + 12 skill_conversation), all passing
 17. CLI usage: `dcr sync`, `dcr search <query>`, `dcr list [-p <project>]`, `dcr show <id_or_uuid>`, `dcr export <id_or_uuid> [-o file]`, `dcr status`, `dcr html`
 18. **Devin Local source**: `~/.local/share/devin/cli/sessions.db` — SQLite plaintext, 104 sessions, 6575 message_nodes, schema version 16 (refinery migrations). No encryption. Opened in `mode=ro`. Full-tree indexing (all nodes incl. lateral branches), `on_main_chain` via tip→root walk, `thinking`/`tool_calls` captured from `chat_message` JSON.
 19. **Cascade source**: `~/.codeium/windsurf/cascade/*.pb` — encrypted protobuf, last file 2026-07-29. Parser currently discards thinking (field 3) and tool_calls (field 7) — **enrichissement annulé (Phase 1B)**, Cascade va être abandonné. Le code reste pour l'archive.
-20. **Next steps**: Phase 4 (`@conversation` skill — `.devin/skills/dcr-conversation/SKILL.md`, global rule update). Phases 1A, 2, 3 completed. Phase 1B annulée.
+20. **Next steps**: **M8 is complete.** No pending phases. Possible future work: CI integration of `check_devin_schema.py` (nightly), HTML overview enrichment (thinking/tool_calls display), performance optimization for large archives.
 
 ## Bug History
 

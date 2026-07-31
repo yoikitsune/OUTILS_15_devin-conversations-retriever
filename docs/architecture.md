@@ -1,6 +1,6 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-31 (M8 Phase 3 completed — schema resilience: check_devin_schema.py, ADR-0006)
+> Last updated: 2026-07-31 (M8 complete — all phases done, 220 tests, @conversation skill)
 
 ## Overview
 
@@ -165,7 +165,7 @@
 ### `server.py` — MCP Server (Rejected)
 
 - **Status**: Rejected — see [ADR-0004](decisions/0004-cli-over-mcp.md)
-- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 208 tests. 0/9 decision criteria favor MCP for this use case.
+- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 220 tests. 0/9 decision criteria favor MCP for this use case.
 - **Integration path**: DCR integrates with Cascade via CLI calls (`run_command`) and optionally via a dedicated skill. No MCP configuration needed.
 
 ## Data Flow

@@ -17,6 +17,7 @@
 
 ### Skills
 - `cascade-self-config` (global skill, project references in `.devin/skills/cascade-self-config/references/`)
+- `dcr-conversation` (project skill — `@conversation` retrieval & context injection)
 
 ### Workflows
 - `/end-session` — protocole de handoff en fin de session

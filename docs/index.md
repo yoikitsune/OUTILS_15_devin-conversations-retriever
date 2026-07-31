@@ -1,6 +1,6 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-31 (M8 Phase 3 completed — schema resilience: check_devin_schema.py, ADR-0006)
+> Last updated: 2026-07-31 (M8 complete — all phases done, 220 tests, @conversation skill)
 
 ## Project
 
@@ -31,6 +31,7 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 | [`/src/dcr/search.py`](../src/dcr/search.py) | FTS5 search engine with filters and auto-sync | Completed (M5) |
 | [`/src/dcr/cli.py`](../src/dcr/cli.py) | CLI interface (`dcr`) with 7 subcommands | Completed (M6) |
 | [`/src/dcr/server.py`](../src/dcr/server.py) | MCP server (FastMCP) | Rejected (M7) — see [ADR-0004](decisions/0004-cli-over-mcp.md) |
+| [`/.devin/skills/dcr-conversation/SKILL.md`](../.devin/skills/dcr-conversation/SKILL.md) | `@conversation` skill — retrieve & inject past conversation context | Completed (M8 Phase 4) |
 
 ## Decision Records
 
@@ -46,7 +47,7 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 ## Verification
 
 ```bash
-# Run all tests (208 tests)
+# Run all tests (220 tests)
 .venv/bin/pytest tests/ -v
 
 # Schema compatibility check
