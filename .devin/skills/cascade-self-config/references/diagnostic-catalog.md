@@ -152,3 +152,26 @@ Ajout d'un rappel dans la rule `update-docs.md` (point 6) : invoquer `/end-sessi
 
 ### Artifact créé
 - Modification de `.devin/rules/update-docs.md`
+
+## ERR-011 : Agent qui va trop vite sans validation — config stale sur les tests/commits
+
+**Catégorie** : practice-adoption + process-gap (rule stale)
+**Date** : 2026-07-31
+**Conversation source** : "Validation phase projet et approche agent" (session apple-pomelo)
+
+### Erreur
+Lors de la planification de M8 Phase 1A, l'utilisateur a ressenti le besoin d'écrire manuellement un prompt recommandant « tâche par tâche, tests après chaque module, commit après chaque tâche réussie ». Trois gaps expliquent ce besoin :
+
+1. `test-with-code.md` listait encore `server.py` (rejeté par ADR-0004), ne listait pas `devin_local.py` (nouveau module M8), et ne disait pas de lancer la **suite complète** sur modification d'un module existant — or Phase 1A modifie `indexer.py` et `cli.py` qui ont déjà 24+31 tests (risque de régression).
+2. `git-commit-discipline.md` disait « committer dès qu'un milestone est terminé » **sans demander validation utilisateur** — l'agent pouvait committer sans approbation.
+3. Aucune rule n'imposait l'exécution séquentielle tâche-par-tâche avec validation avant la suivante — un agent pouvait aller trop vite, d'autant que le comportement varie selon le LLM sous-jacent.
+
+### Correction appliquée
+1. MAJ `test-with-code.md` : retrait de `server.py`, ajout de `devin_local.py` et `cli.py`, ajout de l'instruction « suite complète `pytest tests/ -v` sur modification d'un module existant ».
+2. MAJ `git-commit-discipline.md` : granularité au cas par cas (ne pas durcir), ajout de « validation utilisateur explicite avant tout commit ».
+3. Nouvelle rule `task-sequencing.md` (`model_decision`) : exécution séquentielle des tâches d'une phase, validation tests + utilisateur avant de passer à la suivante, pas d'anticipation.
+
+### Artifacts créés/modifiés
+- Modification de `.devin/rules/test-with-code.md`
+- Modification de `.devin/rules/git-commit-discipline.md`
+- Création de `.devin/rules/task-sequencing.md`

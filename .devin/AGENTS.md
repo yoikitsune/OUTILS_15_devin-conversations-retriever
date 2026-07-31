@@ -11,8 +11,9 @@
 ### Rules
 - `update-docs` (model_decision) — met a jour progress.md, docs/architecture.md, docs/index.md, AGENTS.md quand un milestone est complete ou en fin de session
 - `definition-of-done` (model_decision) — criteres pour marquer un milestone comme termine
-- `test-with-code` (model_decision) — exige un test par module avant de passer au milestone suivant
-- `git-commit-discipline` (model_decision) — un commit par feature/milestone, tests avant commit, pas de commit en bloc
+- `test-with-code` (model_decision) — exige un test par module avant de passer au milestone suivant ; suite complete sur modification d'un module existant
+- `git-commit-discipline` (model_decision) — granularite au cas par cas, validation utilisateur avant commit, tests avant commit, pas de commit en bloc
+- `task-sequencing` (model_decision) — execute les taches d'une phase sequentiellement, valide tests + utilisateur avant de passer a la suivante
 
 ### Skills
 - `cascade-self-config` (global skill, project references in `.devin/skills/cascade-self-config/references/`)
