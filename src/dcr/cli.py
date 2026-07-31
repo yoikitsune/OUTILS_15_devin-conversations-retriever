@@ -504,6 +504,9 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"Steps:         {status['step_count']}")
     print(f"Rounds:        {status['round_count']}")
     print(f"Checkpoints:   {status['checkpoint_count']}")
+    tc = status.get("tool_call_count", 0)
+    if tc:
+        print(f"Tool calls:    {tc}")
     # Per-source breakdown (ADR-0005).
     sources = status.get("sources") or {}
     for src in ("cascade", "devin_local"):
@@ -512,6 +515,19 @@ def cmd_status(args: argparse.Namespace) -> int:
             continue
         print(f"  {src:12s}: {s['conversation_count']} convs ({s['active_count']} active), "
               f"{s['step_count']} steps, {s['checkpoint_count']} checkpoints")
+    # Devin Local schema version (Phase 3.1)
+    ds = status.get("devin_schema") or {}
+    if ds.get("known_version") is not None:
+        detected = ds.get("detected_version")
+        known = ds.get("known_version")
+        st = ds.get("status", "?")
+        if detected is not None:
+            marker = "✓" if st == "ok" else "⚠"
+            print(f"Devin schema: detected v{detected}, known v{known} {marker}")
+            if st == "ahead":
+                print(f"  ⚠ sessions.db schema is newer than dcr supports — sync may miss new fields")
+        else:
+            print(f"Devin schema: sessions.db not found (known v{known})")
     return 0
 
 

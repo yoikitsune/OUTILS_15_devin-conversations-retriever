@@ -1,6 +1,6 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-31 (M8 Phase 2 completed — enrichment: tool_calls table, --source-type, --full-tree)
+> Last updated: 2026-07-31 (M8 Phase 3 completed — schema resilience: check_devin_schema.py, ADR-0006)
 
 ## Project
 
@@ -41,12 +41,17 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 | [ADR-0003](decisions/0003-reuse-windsurf-decrypt-tools.md) | Reuse windsurf-local-user-data-decryption tools | Accepted |
 | [ADR-0004](decisions/0004-cli-over-mcp.md) | CLI + Skill over MCP server | Accepted |
 | [ADR-0005](decisions/0005-unified-schema-devin-local.md) | Unified schema for Devin Local + Cascade | Accepted |
+| [ADR-0006](decisions/0006-devin-local-schema-compat.md) | Devin Local schema compatibility strategy | Accepted |
 
 ## Verification
 
 ```bash
-# Run all tests (191 tests)
+# Run all tests (208 tests)
 .venv/bin/pytest tests/ -v
+
+# Schema compatibility check
+python scripts/check_devin_schema.py         # human-readable
+python scripts/check_devin_schema.py --json  # JSON for CI
 
 # CLI usage
 .venv/bin/dcr sync       # Sync DB with both cascade .pb + devin_local sessions.db

@@ -869,6 +869,22 @@ class Indexer:
 
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
 
+        # Devin Local schema version (Phase 3.1)
+        devin_schema: dict[str, Any] = {}
+        try:
+            from dcr.devin_local import DEFAULT_DEVIN_LOCAL_DB, KNOWN_SCHEMA_VERSION, DevinLocalReader
+            detected = None
+            if DEFAULT_DEVIN_LOCAL_DB.exists():
+                with DevinLocalReader(db_path=DEFAULT_DEVIN_LOCAL_DB) as reader:
+                    detected = reader.schema_version()
+            devin_schema = {
+                "detected_version": detected,
+                "known_version": KNOWN_SCHEMA_VERSION,
+                "status": "ok" if detected is None or detected <= KNOWN_SCHEMA_VERSION else "ahead",
+            }
+        except Exception:
+            devin_schema = {"detected_version": None, "known_version": None, "status": "unavailable"}
+
         return {
             "conversation_count": conv_count,
             "active_count": active_count,
@@ -880,6 +896,7 @@ class Indexer:
             "db_path": str(self.db_path),
             "db_size": db_size,
             "sources": sources,
+            "devin_schema": devin_schema,
         }
 
     def list_conversations(

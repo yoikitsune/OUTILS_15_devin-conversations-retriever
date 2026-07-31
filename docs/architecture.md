@@ -1,6 +1,6 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-31 (M8 Phase 2 completed — enrichment: tool_calls table, --source-type, --full-tree)
+> Last updated: 2026-07-31 (M8 Phase 3 completed — schema resilience: check_devin_schema.py, ADR-0006)
 
 ## Overview
 
@@ -117,7 +117,7 @@
   - `metadata.extensions["compact/prior_node_ids"]` → `checkpoints` (session_summary = compaction node's content)
   - `sessions.metadata.total_credit_cost` → `credit_cost`; `sessions.metadata.total_acu_cost` → `acu_cost` (NO token_input/output/cached — they don't exist at session level)
 - **Full-tree rationale**: 62 % of nodes are lateral branches (regenerations, edited prompts) — valuable signal for `cascade-self-config` diagnosis. `on_main_chain` flag keeps default `dcr show` lean; `dcr show --full-tree` (Phase 2.5) surfaces branches.
-- **Schema versioning**: reads `refinery_schema_history` — warns on unknown versions, degrades gracefully (additive schema).
+- **Schema versioning**: reads `refinery_schema_history` — warns on unknown versions, degrades gracefully (additive schema). `KNOWN_SCHEMA_VERSION = 16`. See ADR-0006 for compatibility strategy, `scripts/check_devin_schema.py` for deep checks, `tests/test_schema_compat.py` for CI tripwire.
 
 ### `indexer.py` — SQLite + FTS5 Indexing (unified schema — ADR-0005)
 
@@ -165,7 +165,7 @@
 ### `server.py` — MCP Server (Rejected)
 
 - **Status**: Rejected — see [ADR-0004](decisions/0004-cli-over-mcp.md)
-- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 191 tests. 0/9 decision criteria favor MCP for this use case.
+- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 208 tests. 0/9 decision criteria favor MCP for this use case.
 - **Integration path**: DCR integrates with Cascade via CLI calls (`run_command`) and optionally via a dedicated skill. No MCP configuration needed.
 
 ## Data Flow
