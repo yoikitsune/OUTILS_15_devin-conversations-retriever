@@ -1,14 +1,14 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-26 (CLI UX improvements)
+> Last updated: 2026-07-31 (ADR-0005: Devin Local support)
 
 ## Project
 
-**Devin Conversations Retriever (DCR)** — A CLI tool that decrypts, indexes, and enables full-text search across local Windsurf Cascade conversation histories (`.pb` files). The SQLite database is a **permanent archive** — conversations are never deleted, even when the source `.pb` file is removed by Windsurf. CLI-only — MCP server rejected (see ADR-0004).
+**Devin Conversations Retriever (DCR)** — A CLI tool that decrypts, indexes, and enables full-text search across local conversation histories from **both** Cascade (encrypted `.pb` files) and **Devin Local** (SQLite `sessions.db`). The SQLite database is a **permanent archive** — conversations are never deleted, even when the source file is removed. CLI-only — MCP server rejected (see ADR-0004). Unified schema with `source_type` discriminator — see ADR-0005.
 
 ## Why
 
-Windsurf stores conversation histories as encrypted protobuf files locally. `trajectory_search` is limited to 50 chunks per query and can't search across conversations. DCR decrypts all conversations, indexes them in a permanent SQLite FTS5 archive, and exposes search via a CLI — enabling both AI agents and humans to find any past discussion. Conversations whose `.pb` file is later removed by Windsurf are **archived, not deleted**.
+Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encrypted protobuf files; Devin Local uses a plaintext SQLite database. `trajectory_search` is limited to 50 chunks per query and can't search across conversations. DCR indexes all conversations from both sources in a permanent SQLite FTS5 archive, and exposes search via a CLI — enabling both AI agents and humans to find any past discussion. Conversations whose source file is later removed are **archived, not deleted**.
 
 ## Documentation Map
 
@@ -25,8 +25,9 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 | Module | Purpose | Status |
 |---|---|---|
 | [`/src/dcr/decrypt.py`](../src/dcr/decrypt.py) | AES-256-GCM decryption of `.pb` files | Completed (M2) |
-| [`/src/dcr/parser.py`](../src/dcr/parser.py) | Protobuf wire-format parsing | Completed (M3) |
-| [`/src/dcr/indexer.py`](../src/dcr/indexer.py) | SQLite + FTS5 indexing with sync() | Completed (M4) |
+| [`/src/dcr/parser.py`](../src/dcr/parser.py) | Protobuf wire-format parsing (enrichment: thinking, tool_calls — Phase 1B, deferred) | Completed (M3) — enrichment deferred (M8 Phase 1B) |
+| [`/src/dcr/devin_local.py`](../src/dcr/devin_local.py) | Devin Local SQLite reader (`sessions.db` → `TrajectoryInfo`, full-tree, `chat_message` JSON) | Planned (M8 / Phase 1A) |
+| [`/src/dcr/indexer.py`](../src/dcr/indexer.py) | SQLite + FTS5 indexing with sync() (both sources, full-tree for Devin Local) | Completed (M4) — Devin Local sync planned (M8 Phase 1A) |
 | [`/src/dcr/search.py`](../src/dcr/search.py) | FTS5 search engine with filters and auto-sync | Completed (M5) |
 | [`/src/dcr/cli.py`](../src/dcr/cli.py) | CLI interface (`dcr`) with 7 subcommands | Completed (M6) |
 | [`/src/dcr/server.py`](../src/dcr/server.py) | MCP server (FastMCP) | Rejected (M7) — see [ADR-0004](decisions/0004-cli-over-mcp.md) |
@@ -39,16 +40,17 @@ Windsurf stores conversation histories as encrypted protobuf files locally. `tra
 | [ADR-0002](decisions/0002-sqlite-fts5-for-search.md) | SQLite + FTS5 for full-text search | Accepted |
 | [ADR-0003](decisions/0003-reuse-windsurf-decrypt-tools.md) | Reuse windsurf-local-user-data-decryption tools | Accepted |
 | [ADR-0004](decisions/0004-cli-over-mcp.md) | CLI + Skill over MCP server | Accepted |
+| [ADR-0005](decisions/0005-unified-schema-devin-local.md) | Unified schema for Devin Local + Cascade | Accepted |
 
 ## Verification
 
 ```bash
-# Run all tests (125 tests)
+# Run all tests (124 tests)
 .venv/bin/pytest tests/ -v
 
 # CLI usage
-.venv/bin/dcr sync       # Sync DB with cascade .pb files (archives stale, never deletes)
-.venv/bin/dcr status     # Show DB stats (active + archived counts)
+.venv/bin/dcr sync       # Sync DB with both cascade .pb + devin_local sessions.db
+.venv/bin/dcr status     # Show DB stats (active + archived, per source)
 .venv/bin/dcr list -l 5  # List 5 most recent conversations
 .venv/bin/dcr list -p /path/to/project  # Filter by project path
 .venv/bin/dcr search "protobuf"  # Full-text search (includes archived)
