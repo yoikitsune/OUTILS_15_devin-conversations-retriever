@@ -69,7 +69,7 @@
 - **Algorithm**: AES-256-GCM, key = `safeCodeiumworldKeYsecretBalloon`
 - **File format**: `[nonce 12B][ciphertext][GCM tag 16B]`
 
-### `parser.py` — Protobuf Parsing (enrichment deferred — Phase 1B)
+### `parser.py` — Protobuf Parsing (enrichment cancelled — Phase 1B)
 
 - **Source**: Adapted from `windsurf-local-user-data-decryption/tools/scan_trajectory.py`
 - **Input**: Decrypted protobuf bytes

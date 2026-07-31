@@ -25,7 +25,7 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 | Module | Purpose | Status |
 |---|---|---|
 | [`/src/dcr/decrypt.py`](../src/dcr/decrypt.py) | AES-256-GCM decryption of `.pb` files | Completed (M2) |
-| [`/src/dcr/parser.py`](../src/dcr/parser.py) | Protobuf wire-format parsing (enrichment: thinking, tool_calls — Phase 1B, deferred) | Completed (M3) — enrichment deferred (M8 Phase 1B) |
+| [`/src/dcr/parser.py`](../src/dcr/parser.py) | Protobuf wire-format parsing (enrichment: thinking, tool_calls — Phase 1B, cancelled) | Completed (M3) — enrichment cancelled (Cascade abandoned) |
 | [`/src/dcr/devin_local.py`](../src/dcr/devin_local.py) | Devin Local SQLite reader (`sessions.db` → `TrajectoryInfo`, full-tree, `chat_message` JSON) | Completed (M8 Phase 1A) |
 | [`/src/dcr/indexer.py`](../src/dcr/indexer.py) | SQLite + FTS5 indexing with sync() (both sources, full-tree for Devin Local) | Completed (M4 + M8 Phase 1A) |
 | [`/src/dcr/search.py`](../src/dcr/search.py) | FTS5 search engine with filters and auto-sync | Completed (M5) |

@@ -158,25 +158,19 @@ beyond the D1 columns.
 **Rationale**: Devin Local evolves. The `refinery` migration system is additive by design.
 `dcr` must not crash on schema evolution — degrade gracefully, warn loudly.
 
-### D5: Enrich Cascade parser (retroactive) — deferred to Phase 1B
+### D5: Enrich Cascade parser (retroactive) — CANCELLED 2026-07-31 (Phase 1B)
 
-Extend `extract_step_text` and `parse_step` to extract structured fields currently discarded:
+**Annulé** — Cascade va être abandonné dans Devin Desktop, Devin Local sera bientôt la seule
+source. Enrichir le parser Cascade n'a pas d'intérêt : les conversations existantes restent
+recherchables (texte déjà indexé), et le diagnostic `cascade-self-config` porte désormais sur
+Devin Local (où thinking/tool_calls sont déjà capturés gratuitement en Phase 1A). Le code
+Cascade (`decrypt.py`, `parser.py`, `_sync_cascade`) reste en place pour l'archive.
 
-- **Variant 20 (planner_response)**: field 3 → `thinking`, field 7 → `tool_calls_json`
-- **Variant 28 (run_command)**: field 23 → `content_text` (command), field 24 → tool result
-- **Variant 37 (command_result)**: field 24 → `content_text` (output)
-
-A re-index of existing `.pb` files recovers this data retroactively. This requires a new
-`dcr sync --force` flag (does not exist in the current CLI — must be added as part of Phase 1B)
-that bypasses the mtime+size incremental skip.
-
-**Rationale**: the data is already in the `.pb` files — we were just throwing it away. However,
-the user's primary use case is **Devin Local** (Cascade is in maintenance mode), and Devin
-Local's `thinking`/`tool_calls` are captured for free in Phase 1A (they're keys in the
-`chat_message` JSON, no extra parsing cost). Enriching the Cascade parser is therefore
-**orthogonal and lower priority** — it's split into Phase 1B so Phase 1A stays small and
-doesn't risk regressing the 124 existing tests. Phase 1B can be done later or skipped entirely
-if Cascade enrichment turns out not to be needed.
+Le plan original (préservé pour historique) était d'étendre `extract_step_text` et `parse_step`
+pour extraire les champs structurés actuellement discardés (variant 20 field 3 → thinking,
+field 7 → tool_calls_json ; variant 28 field 23 → command, field 24 → output ; variant 37
+field 24 → output), avec un nouveau flag `dcr sync --force` pour bypasser le skip
+incremental. Cela ne sera pas implémenté.
 
 ## Devin Local → dcr mapping
 
@@ -239,11 +233,10 @@ tests. `thinking`/`tool_calls` are captured for free (they're keys in the `chat_
 | 1A.6 | `tests/` | `test_devin_local.py`, `test_indexer_devin_local.py` (full-tree, compaction, main-chain flag, incremental, archive). |
 | 1A.7 | `docs/` | This ADR + architecture.md + progress.md + index.md updates. |
 
-### Phase 1B: Cascade parser enrichment (deferred, optional)
+### Phase 1B: Cascade parser enrichment (CANCELLED 2026-07-31)
 
-Orthogonal to Devin Local. Only needed if the user wants to diagnose old Cascade conversations
-with the same richness as Devin Local. Can be skipped entirely if Cascade enrichment turns out
-not to be worth it.
+**Annulé** — Cascade va être abandonné dans Devin Desktop. Voir D5 ci-dessus. Le plan original
+(préservé pour historique) :
 
 | Task | Module | Detail |
 |---|---|---|
@@ -288,7 +281,7 @@ not to be worth it.
 | Lock contention on `sessions.db` (Devin Local writes during sync) | Open in `mode=ro` (read-only URI). |
 | Performance: 102 sessions × 6056 nodes (full-tree, ~3.4× the main-chain volume) | SQLite → SQLite, batch insert, single transaction per session. FTS5 on `content_text` + `thinking` increases DB size but stays well within SQLite limits. |
 | Full-tree volume: 62 % of nodes are lateral branches | Indexed (user wants abandoned responses for `cascade-self-config` diagnosis). `on_main_chain` flag keeps default views lean; `--full-tree` is opt-in (Phase 2.5). |
-| Re-index Cascade for enrichment (Phase 1B) | `dcr sync --force` (new flag, Phase 1B.2). Optional — existing data stays valid. Phase 1B is deferrable/skippable. |
+| Re-index Cascade for enrichment (Phase 1B) | **Phase 1B annulée** — Cascade va être abandonné. Le code Cascade reste pour l'archive. |
 
 ## Consequences
 
@@ -301,5 +294,5 @@ not to be worth it.
   (`devin_local.py`) to maintain. Devin Local schema version must be monitored (Phase 3).
   Full-tree indexing increases DB size (~3.4× main-chain volume) and FTS5 index size.
 - **Neutral**: `source_type` column adds a filter dimension but doesn't change existing
-  queries (default = all sources). Cascade parser enrichment (Phase 1B) is deferred and
-  skippable — it doesn't block Devin Local value.
+  queries (default = all sources). Cascade parser enrichment (Phase 1B) est annulé —
+  Cascade va être abandonné, cela ne bloque pas la valeur de Devin Local.
