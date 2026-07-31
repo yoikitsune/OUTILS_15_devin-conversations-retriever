@@ -367,4 +367,22 @@ def test_search_real_data_conversations(real_pb_dir: Path | None, tmp_path: Path
         assert "title" in c
         assert "best_snippet" in c
 
-    engine.close()
+
+# --- Phase 2: source_type filter + tool_calls search ---
+
+
+def test_search_filter_source_type(search_engine: SearchEngine, sample_trajectory: TrajectoryInfo):
+    """search with source_type filter restricts results to that source."""
+    # sample_trajectory is indexed as cascade (default source_type)
+    results = search_engine.search("parse", source_type="cascade")
+    assert results.total > 0
+    # No devin_local conversations in this test DB → should return 0
+    results = search_engine.search("parse", source_type="devin_local")
+    assert results.total == 0
+
+
+def test_search_source_table_tool_calls(search_engine: SearchEngine, sample_trajectory: TrajectoryInfo):
+    """search with source_table=tool_calls searches the tool_calls FTS table."""
+    # sample_trajectory has no tool_calls, so this should return 0 without error
+    results = search_engine.search("anything", source_table="tool_calls")
+    assert results.total == 0

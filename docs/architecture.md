@@ -1,6 +1,6 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-31 (M8 Phase 1A completed — Devin Local integration live)
+> Last updated: 2026-07-31 (M8 Phase 2 completed — enrichment: tool_calls table, --source-type, --full-tree)
 
 ## Overview
 
@@ -127,8 +127,9 @@
   - `rounds`: id, conversation_id, round_number, prompt, start_step, end_step
   - `steps`: id, conversation_id, step_index, type, status, variant_field, content_text, timestamp, model, **`role`** (user/assistant/system/tool), **`thinking`**, **`tool_calls_json`**, **`tool_call_id`**, **`node_id`** (Devin Local), **`parent_node_id`** (Devin Local), **`on_main_chain`** (0/1, Devin Local)
   - `checkpoints`: id, conversation_id, step_index, checkpoint_index, user_intent, session_summary, code_change_summary, memory_summary, conversation_title, plan_snapshot, intent_only, included_step_index_start, included_step_index_end, edited_files
-- **FTS5 virtual tables**: `rounds_fts` (prompt), `steps_fts` (content_text), `checkpoints_fts` (user_intent, session_summary, code_change_summary, memory_summary, conversation_title)
-- **Triggers**: 9 auto-sync triggers (insert/delete/update on each FTS5 table)
+  - `tool_calls` (Phase 2.1): id, conversation_id, step_id, tool_call_id, tool_name, arguments_json, result_step_id, result_text — joins `chat_message.tool_calls` (assistant) with tool-role nodes (results) via `tool_call_id`
+- **FTS5 virtual tables**: `rounds_fts` (prompt), `steps_fts` (content_text), `checkpoints_fts` (user_intent, session_summary, code_change_summary, memory_summary, conversation_title), `tool_calls_fts` (arguments_json, result_text)
+- **Triggers**: 12 auto-sync triggers (insert/delete/update on each FTS5 table: rounds, steps, checkpoints, tool_calls)
 - **Indexes**: cascade_id, project_path, created_at, archived, source_type, conversation_id (rounds/steps/checkpoints)
 - **Migrations**: `MIGRATION_SQL` list — `ALTER TABLE` statements run after `SCHEMA_SQL`, with `try/except` for idempotency. ADR-0005 columns added here (source_type, agent_mode, credit_cost, acu_cost, role, thinking, tool_calls_json, tool_call_id, node_id, parent_node_id, on_main_chain).
 - **Indexing strategy — Cascade**: Incremental — skip files where mtime + size match existing record. Conversations whose `.pb` file no longer exists are **archived** (archived=1), never deleted. (Cascade parser enrichment deferred to Phase 1B — see ADR-0005 D5.)
@@ -138,8 +139,8 @@
 ### `search.py` — Search Engine
 
 - **Query type**: FTS5 full-text (BM25 ranking)
-- **Tables searched**: `rounds_fts`, `steps_fts`, `checkpoints_fts` (all by default, or restrict via `source_table`)
-- **Filters**: `project` (exact + prefix match), `date_from`/`date_to` (on `created_at`), `source_table` (rounds/steps/checkpoints)
+- **Tables searched**: `rounds_fts`, `steps_fts`, `checkpoints_fts`, `tool_calls_fts` (all by default, or restrict via `source_table`)
+- **Filters**: `project` (exact + prefix match), `date_from`/`date_to` (on `created_at`), `source_table` (rounds/steps/checkpoints/tool_calls), `source_type` (cascade/devin_local)
 - **Snippets**: FTS5 `snippet()` with `>>>match<<<` markers, 20-word window
 - **Query escaping**: Tokens wrapped in double quotes to prevent FTS5 syntax injection; `AND`/`OR`/`NOT` preserved
 - **Deduplication**: `search_conversations()` returns one result per conversation (best match)
@@ -152,11 +153,11 @@
 - **Entry point**: `dcr` (declared in `pyproject.toml`)
 - **Subcommands**:
   - `dcr sync` — Sync database with **both** cascade `.pb` files and devin_local `sessions.db` (incremental, archives stale conversations — never deletes)
-  - `dcr search <query>` — Full-text search with `-p/--project`, `-s/--source`, `-l/--limit` filters
-  - `dcr list` — List conversations with `-l/--limit`, `-p/--project` (exact or prefix match), `--no-sync`, shows `source_type`
-  - `dcr show <cascade_id>` — Show conversation details (supports UUID prefix, slug, or numeric DB id)
-  - `dcr export <cascade_id>` — Export conversation as structured markdown (rounds → steps with full content, checkpoints). Supports `-o/--output` for file output, UUID prefix, slug, or numeric DB id.
-  - `dcr status` — Database statistics (per-source breakdown: cascade vs devin_local)
+  - `dcr search <query>` — Full-text search with `-p/--project`, `-s/--source` (rounds/steps/checkpoints/tool_calls), `--source-type` (cascade/devin_local), `-l/--limit`, `--date-from/--date-to` filters
+  - `dcr list` — List conversations with `-l/--limit`, `-p/--project` (exact or prefix match), `--source-type` (cascade/devin_local), `--no-sync`, shows `source_type` column
+  - `dcr show <cascade_id>` — Show conversation details (supports UUID prefix, slug, or numeric DB id). Displays thinking/tool_calls enrichment flags (`{T}`, `{C}`), tool calls summary. `--full-tree` shows lateral branches (`on_main_chain=0`); default = main chain only.
+  - `dcr export <cascade_id>` — Export conversation as structured markdown (rounds → steps with full content, thinking in collapsible `<details>`, tool calls with arguments, checkpoints). Supports `-o/--output`, `--full-tree`, UUID prefix, slug, or numeric DB id.
+  - `dcr status` — Database statistics (per-source breakdown: cascade vs devin_local, tool_call_count)
   - `dcr html` — Generate sortable HTML overview (`-o/--output`), date columns use `data-sort` attribute with Unix timestamp for correct numeric sorting
 - **Auto-sync**: Enabled by default for `search`, `list`, `html` (disable with `--no-sync`)
 - **Global option**: `--db <path>` to override database location
@@ -164,7 +165,7 @@
 ### `server.py` — MCP Server (Rejected)
 
 - **Status**: Rejected — see [ADR-0004](decisions/0004-cli-over-mcp.md)
-- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 177 tests. 0/9 decision criteria favor MCP for this use case.
+- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 191 tests. 0/9 decision criteria favor MCP for this use case.
 - **Integration path**: DCR integrates with Cascade via CLI calls (`run_command`) and optionally via a dedicated skill. No MCP configuration needed.
 
 ## Data Flow

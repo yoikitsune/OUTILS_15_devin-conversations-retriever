@@ -362,6 +362,116 @@ def test_search_finds_devin_local_content(indexer: Indexer, synthetic_devin_db: 
     assert "pytest" in rows[0][0].lower()
 
 
+# --- tool_calls table tests (Phase 2.1) ---
+
+
+def test_tool_calls_table_populated(indexer: Indexer, synthetic_devin_db: Path):
+    """_sync_devin_local populates the tool_calls table from chat_message.tool_calls."""
+    indexer._sync_devin_local(synthetic_devin_db)
+    cur = indexer.conn.execute(
+        "SELECT tool_name, arguments_json, result_text FROM tool_calls "
+        "WHERE conversation_id = (SELECT id FROM conversations WHERE cascade_id='test-slug')"
+    )
+    rows = cur.fetchall()
+    # The sample session has 1 tool call (read) with a matching tool-role result.
+    assert len(rows) == 1
+    name, args, result = rows[0]
+    assert name == "read"
+    assert "file_path" in args
+    assert result == "file contents"  # from the tool-role node content
+
+
+def test_tool_calls_fts_search(indexer: Indexer, synthetic_devin_db: Path):
+    """FTS5 search finds tool_calls by arguments content."""
+    indexer._sync_devin_local(synthetic_devin_db)
+    cur = indexer.conn.execute(
+        "SELECT tc.tool_name FROM tool_calls_fts fts "
+        "JOIN tool_calls tc ON tc.id = fts.rowid "
+        "WHERE tool_calls_fts MATCH 'file_path' ORDER BY rank"
+    )
+    rows = cur.fetchall()
+    assert len(rows) >= 1
+    assert rows[0][0] == "read"
+
+
+def test_tool_calls_no_result_when_no_match(indexer: Indexer, synthetic_devin_db: Path):
+    """Tool calls without a matching tool-role node have NULL result."""
+    # Build a session where the assistant makes a tool call but no tool node exists.
+    db_path = synthetic_devin_db.parent / "orphan.db"
+    session = _sample_session()
+    # Remove the tool-role node (node_id=3) so the tool call has no result.
+    session["nodes"] = [n for n in session["nodes"] if n["node_id"] != 3]
+    _build_sessions_db(db_path, [session])
+    indexer._sync_devin_local(db_path)
+    cur = indexer.conn.execute(
+        "SELECT result_text FROM tool_calls "
+        "WHERE conversation_id = (SELECT id FROM conversations WHERE cascade_id='test-slug')"
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] is None  # no matching tool node
+
+
+def test_tool_calls_cleaned_on_reindex(indexer: Indexer, synthetic_devin_db: Path):
+    """Re-indexing a conversation cleans old tool_calls rows before inserting new ones."""
+    indexer._sync_devin_local(synthetic_devin_db)
+    cur = indexer.conn.execute("SELECT COUNT(*) FROM tool_calls")
+    count1 = cur.fetchone()[0]
+    # Force re-index.
+    conn = sqlite3.connect(str(synthetic_devin_db))
+    conn.execute("UPDATE sessions SET last_activity_at = 1785009999 WHERE id = 'test-slug'")
+    conn.commit()
+    conn.close()
+    indexer._sync_devin_local(synthetic_devin_db)
+    cur = indexer.conn.execute("SELECT COUNT(*) FROM tool_calls")
+    count2 = cur.fetchone()[0]
+    assert count1 == count2  # same count, no duplicates
+
+
+def test_get_status_includes_tool_call_count(indexer: Indexer, synthetic_devin_db: Path):
+    """get_status includes tool_call_count."""
+    indexer._sync_devin_local(synthetic_devin_db)
+    status = indexer.get_status()
+    assert "tool_call_count" in status
+    assert status["tool_call_count"] == 1
+
+
+def test_get_conversation_includes_tool_calls(indexer: Indexer, synthetic_devin_db: Path):
+    """get_conversation includes the tool_calls list."""
+    indexer._sync_devin_local(synthetic_devin_db)
+    conv = indexer.get_conversation("test-slug")
+    assert "tool_calls" in conv
+    assert len(conv["tool_calls"]) == 1
+    assert conv["tool_calls"][0]["tool_name"] == "read"
+
+
+# --- list_conversations source_type filter (Phase 2.3) ---
+
+
+def test_list_conversations_filter_source_type(indexer: Indexer, synthetic_devin_db: Path, tmp_path: Path):
+    """list_conversations filters by source_type."""
+    indexer._sync_devin_local(synthetic_devin_db)
+    # Add a fake cascade conversation.
+    from dcr.parser import TrajectoryInfo
+    traj = TrajectoryInfo(
+        trajectory_id="traj-c", cascade_id="cascade-uuid",
+        trajectory_type=1, source=2,
+        project_path="/tmp", steps=[],
+    )
+    indexer.index_trajectory(traj, cascade_id="cascade-uuid")
+    # Filter: devin_local only
+    convs = indexer.list_conversations(source_type="devin_local")
+    assert all(c["source_type"] == "devin_local" for c in convs)
+    assert len(convs) == 1
+    # Filter: cascade only
+    convs = indexer.list_conversations(source_type="cascade")
+    assert all(c["source_type"] == "cascade" for c in convs)
+    assert len(convs) == 1
+    # No filter: both
+    convs = indexer.list_conversations()
+    assert len(convs) == 2
+
+
 # --- Real data tests ---
 
 

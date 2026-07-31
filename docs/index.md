@@ -1,6 +1,6 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-31 (M8 Phase 1A completed — Devin Local integration live)
+> Last updated: 2026-07-31 (M8 Phase 2 completed — enrichment: tool_calls table, --source-type, --full-tree)
 
 ## Project
 
@@ -45,16 +45,21 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 ## Verification
 
 ```bash
-# Run all tests (177 tests)
+# Run all tests (191 tests)
 .venv/bin/pytest tests/ -v
 
 # CLI usage
 .venv/bin/dcr sync       # Sync DB with both cascade .pb + devin_local sessions.db
-.venv/bin/dcr status     # Show DB stats (active + archived, per source)
+.venv/bin/dcr status     # Show DB stats (active + archived, per source, tool_calls count)
 .venv/bin/dcr list -l 5  # List 5 most recent conversations
 .venv/bin/dcr list -p /path/to/project  # Filter by project path
+.venv/bin/dcr list --source-type devin_local  # Filter by source type
 .venv/bin/dcr search "protobuf"  # Full-text search (includes archived)
-.venv/bin/dcr show 04a36d38       # Show conversation (UUID prefix or numeric DB id)
-.venv/bin/dcr export 04a36d38     # Export conversation as markdown
+.venv/bin/dcr search "read" --source-type devin_local  # Filter by source type
+.venv/bin/dcr search "file_path" -s tool_calls  # Search tool_calls table
+.venv/bin/dcr show 04a36d38       # Show conversation (main chain only)
+.venv/bin/dcr show 04a36d38 --full-tree  # Show all steps incl. lateral branches
+.venv/bin/dcr export 04a36d38     # Export conversation as markdown (thinking in <details>)
+.venv/bin/dcr export 04a36d38 --full-tree  # Export all steps incl. branches
 .venv/bin/dcr html                # Generate HTML overview
 ```

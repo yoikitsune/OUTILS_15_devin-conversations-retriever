@@ -77,6 +77,7 @@ class SearchEngine:
         date_from: float | None = None,
         date_to: float | None = None,
         source_table: str | None = None,
+        source_type: str | None = None,
     ) -> SearchResults:
         """Search conversations with FTS5 and optional filters.
 
@@ -87,7 +88,9 @@ class SearchEngine:
             date_from: Filter conversations created after this timestamp.
             date_to: Filter conversations created before this timestamp.
             source_table: Restrict search to one table ("rounds", "steps",
-                "checkpoints"). If None, searches all three.
+                "checkpoints", "tool_calls"). If None, searches all four.
+            source_type: Restrict to source type ("cascade" or "devin_local").
+                If None, searches both sources.
 
         Returns:
             SearchResults with ranked matches.
@@ -111,12 +114,16 @@ class SearchEngine:
             conv_filters.append("c.created_at <= ?")
             params.append(date_to)
 
+        if source_type:
+            conv_filters.append("c.source_type = ?")
+            params.append(source_type)
+
         # Determine which tables to search
         tables: list[str]
         if source_table:
             tables = [source_table]
         else:
-            tables = ["rounds", "steps", "checkpoints"]
+            tables = ["rounds", "steps", "checkpoints", "tool_calls"]
 
         # Escape query for safe FTS5 usage
         fts_query = self._escape_fts_query(query)
@@ -172,6 +179,9 @@ class SearchEngine:
             join_col = "t.conversation_id"
         elif table == "checkpoints":
             table_cols = "NULL as round_number, t.step_index"
+            join_col = "t.conversation_id"
+        elif table == "tool_calls":
+            table_cols = "NULL as round_number, NULL as step_index"
             join_col = "t.conversation_id"
         else:
             return []

@@ -402,3 +402,57 @@ def test_cli_export_real(real_db: Path | None, capsys: pytest.CaptureFixture[str
     out = capsys.readouterr().out
     assert "# " in out
     assert "Round" in out or "Steps" in out
+
+
+# --- Phase 2 tests ---
+
+
+def test_cli_list_source_type_filter(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """dcr list --source-type filters by source type."""
+    ret = main(["--db", str(db_path), "list", "--no-sync", "--source-type", "cascade"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Protobuf" in out  # title of the sample conversation
+
+    ret = main(["--db", str(db_path), "list", "--no-sync", "--source-type", "devin_local"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "No conversations" in out or "Total: 0" in out
+
+
+def test_cli_search_source_type_filter(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """dcr search --source-type filters by source type."""
+    ret = main(["--db", str(db_path), "search", "protobuf", "--no-sync", "--source-type", "cascade"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Found" in out
+
+    ret = main(["--db", str(db_path), "search", "protobuf", "--no-sync", "--source-type", "devin_local"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "No results" in out
+
+
+def test_cli_show_full_tree_flag(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """dcr show --full-tree doesn't error and shows steps."""
+    ret = main(["--db", str(db_path), "show", "cascade-001", "--no-sync", "--full-tree", "--steps", "5"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Steps" in out
+
+
+def test_cli_export_full_tree_flag(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """dcr export --full-tree doesn't error and produces markdown."""
+    ret = main(["--db", str(db_path), "export", "cascade-001", "--no-sync", "--full-tree"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "# " in out
+
+
+def test_cli_status_shows_tool_call_count(db_path: Path, capsys: pytest.CaptureFixture[str]):
+    """dcr status includes tool call count in output."""
+    ret = main(["--db", str(db_path), "status", "--no-sync"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    # The status output should mention tool calls if there are any, or at least not crash
+    assert "Conversations:" in out

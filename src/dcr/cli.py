@@ -119,6 +119,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         date_from=args.date_from,
         date_to=args.date_to,
         source_table=args.source,
+        source_type=args.source_type,
     )
     engine.close()
 
@@ -158,7 +159,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     idx.init_schema()
     if not args.no_sync:
         idx.sync()
-    convs = idx.list_conversations(limit=args.limit, project=args.project)
+    convs = idx.list_conversations(limit=args.limit, project=args.project, source_type=args.source_type)
     idx.close()
 
     if not convs:
@@ -232,21 +233,49 @@ def cmd_show(args: argparse.Namespace) -> int:
     # Steps (show first N)
     if conv.get("steps"):
         max_show = args.steps if args.steps else 20
-        steps = conv["steps"][:max_show]
-        print(f"Steps (showing {len(steps)} of {conv['step_count']}):")
+        all_steps = conv["steps"]
+        # By default, only show main-chain steps. --full-tree shows everything.
+        if not getattr(args, "full_tree", False):
+            displayed = [s for s in all_steps if s.get("on_main_chain") is None or s.get("on_main_chain") == 1]
+        else:
+            displayed = list(all_steps)
+        steps = displayed[:max_show]
+        tree_note = "" if getattr(args, "full_tree", False) else " (main chain only — use --full-tree for branches)"
+        print(f"Steps (showing {len(steps)} of {len(displayed)} displayed, {len(all_steps)} total){tree_note}:")
         for s in steps:
-            text = _truncate(s["content_text"] or "(empty)", 70)
+            text = _truncate(s["content_text"] or "(empty)", 60)
             ts = _fmt_ts(s["timestamp"]) if s.get("timestamp") else ""
             model = s.get("model") or ""
             role = s.get("role") or ""
             role_tag = f" [{role}]" if role else ""
             on_main = s.get("on_main_chain")
             branch_tag = "" if on_main is None else ("  " if on_main else "  ~")
+            # Enrichment indicators
+            flags = []
+            if s.get("thinking"):
+                flags.append("T")
+            if s.get("tool_calls_json"):
+                flags.append("C")
+            flag_str = f" {{{''.join(flags)}}}" if flags else ""
             vf = s["variant_field"]
             vf_str = "?" if vf is None else str(vf)
-            print(f"  #{s['step_index']:3d}  v={vf_str:>3}  {ts:12s}  {model:10s}  {text}{role_tag}{branch_tag}")
-        if len(conv["steps"]) > max_show:
-            print(f"  ... and {len(conv['steps']) - max_show} more steps")
+            print(f"  #{s['step_index']:3d}  v={vf_str:>3}  {ts:12s}  {model:10s}  {text}{role_tag}{branch_tag}{flag_str}")
+        if len(displayed) > max_show:
+            print(f"  ... and {len(displayed) - max_show} more steps")
+        print()
+
+    # Tool calls summary
+    if conv.get("tool_calls"):
+        tcs = conv["tool_calls"]
+        max_tc = 10
+        print(f"Tool calls ({len(tcs)} total, showing {min(len(tcs), max_tc)}):")
+        for tc in tcs[:max_tc]:
+            name = tc.get("tool_name") or "?"
+            tcid = (tc.get("tool_call_id") or "")[:20]
+            has_result = "✓" if tc.get("result_text") else "✗"
+            print(f"  {name:15s}  {tcid:20s}  result: {has_result}")
+        if len(tcs) > max_tc:
+            print(f"  ... and {len(tcs) - max_tc} more tool calls")
         print()
 
     # Checkpoints
@@ -258,6 +287,75 @@ def cmd_show(args: argparse.Namespace) -> int:
         print()
 
     return 0
+
+
+def _export_step(s: dict, add: callable) -> None:
+    """Export a single step as markdown, including thinking and tool calls.
+
+    Renders thinking in a collapsible ``<details>`` block (Phase 2.2),
+    and tool calls (name + arguments + result) after the content (Phase 2.2).
+    """
+    vlabel = _VARIANT_LABELS.get(s["variant_field"], f"variant_{s['variant_field']}")
+    ts = _fmt_ts(s["timestamp"]) if s.get("timestamp") else ""
+    model = s.get("model") or ""
+    role = s.get("role") or ""
+    meta_parts = [f"step {s['step_index']}", vlabel]
+    if role:
+        meta_parts.append(f"role={role}")
+    if ts:
+        meta_parts.append(ts)
+    if model:
+        meta_parts.append(model)
+    on_main = s.get("on_main_chain")
+    if on_main is not None and on_main == 0:
+        meta_parts.append("~branch")
+    add(f"### {' | '.join(meta_parts)}")
+    add()
+
+    # Thinking (collapsible)
+    thinking = (s.get("thinking") or "").strip()
+    if thinking:
+        add("<details><summary>Thinking</summary>")
+        add()
+        add("```")
+        add(thinking)
+        add("```")
+        add()
+        add("</details>")
+        add()
+
+    # Content
+    text = (s["content_text"] or "").strip()
+    if text:
+        add("```")
+        add(text)
+        add("```")
+    else:
+        add("*(empty)*")
+    add()
+
+    # Tool calls
+    tc_json = s.get("tool_calls_json")
+    if tc_json:
+        import json as _json
+        try:
+            calls = _json.loads(tc_json)
+        except (ValueError, TypeError):
+            calls = []
+        for call in calls:
+            if not isinstance(call, dict):
+                continue
+            name = call.get("name") or "?"
+            args = call.get("arguments")
+            add(f"<details><summary>Tool call: {name}</summary>")
+            add()
+            if args is not None:
+                add("```json")
+                add(_json.dumps(args, indent=2, ensure_ascii=False))
+                add("```")
+            add()
+            add("</details>")
+            add()
 
 
 def cmd_export(args: argparse.Namespace) -> int:
@@ -300,8 +398,14 @@ def cmd_export(args: argparse.Namespace) -> int:
     _add("---")
     _add()
 
-    # Build step lookup
-    steps_by_index = {s["step_index"]: s for s in conv.get("steps", [])}
+    # Build step lookup — filter lateral branches unless --full-tree
+    full_tree = getattr(args, "full_tree", False)
+    all_steps = conv.get("steps", [])
+    if not full_tree:
+        exported_steps = [s for s in all_steps if s.get("on_main_chain") is None or s.get("on_main_chain") == 1]
+    else:
+        exported_steps = list(all_steps)
+    steps_by_index = {s["step_index"]: s for s in exported_steps}
 
     # Rounds with their steps
     rounds = conv.get("rounds", [])
@@ -326,47 +430,13 @@ def cmd_export(args: argparse.Namespace) -> int:
 
             if round_steps:
                 for s in round_steps:
-                    vlabel = _VARIANT_LABELS.get(s["variant_field"], f"variant_{s['variant_field']}")
-                    ts = _fmt_ts(s["timestamp"]) if s.get("timestamp") else ""
-                    model = s.get("model") or ""
-                    meta_parts = [f"step {s['step_index']}", vlabel]
-                    if ts:
-                        meta_parts.append(ts)
-                    if model:
-                        meta_parts.append(model)
-                    _add(f"### {' | '.join(meta_parts)}")
-                    _add()
-                    text = (s["content_text"] or "").strip()
-                    if text:
-                        _add("```")
-                        _add(text)
-                        _add("```")
-                    else:
-                        _add("*(empty)*")
-                    _add()
+                    _export_step(s, _add)
     else:
-        # No rounds — just dump all steps
+        # No rounds — just dump all (filtered) steps
         _add("## Steps")
         _add()
-        for s in conv.get("steps", []):
-            vlabel = _VARIANT_LABELS.get(s["variant_field"], f"variant_{s['variant_field']}")
-            ts = _fmt_ts(s["timestamp"]) if s.get("timestamp") else ""
-            model = s.get("model") or ""
-            meta_parts = [f"step {s['step_index']}", vlabel]
-            if ts:
-                meta_parts.append(ts)
-            if model:
-                meta_parts.append(model)
-            _add(f"### {' | '.join(meta_parts)}")
-            _add()
-            text = (s["content_text"] or "").strip()
-            if text:
-                _add("```")
-                _add(text)
-                _add("```")
-            else:
-                _add("*(empty)*")
-                _add()
+        for s in exported_steps:
+            _export_step(s, _add)
 
     # Checkpoints
     checkpoints = conv.get("checkpoints", [])
@@ -591,8 +661,11 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Only conversations created after this date (YYYY-MM-DD)")
     p_search.add_argument("--date-to", dest="date_to", type=_parse_date, default=None,
                           help="Only conversations created before this date (YYYY-MM-DD)")
-    p_search.add_argument("-s", "--source", default=None, choices=["rounds", "steps", "checkpoints"],
+    p_search.add_argument("-s", "--source", default=None, choices=["rounds", "steps", "checkpoints", "tool_calls"],
                           help="Restrict search to one table")
+    p_search.add_argument("--source-type", dest="source_type", default=None,
+                          choices=["cascade", "devin_local"],
+                          help="Restrict search to one source type")
     p_search.add_argument("--no-sync", action="store_true", help="Skip auto-sync before search")
     p_search.set_defaults(func=cmd_search)
 
@@ -600,6 +673,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_list = subparsers.add_parser("list", help="List indexed conversations")
     p_list.add_argument("-l", "--limit", type=int, default=50, help="Max conversations (default: 50)")
     p_list.add_argument("-p", "--project", default=None, help="Filter by project path (exact or prefix)")
+    p_list.add_argument("--source-type", dest="source_type", default=None,
+                        choices=["cascade", "devin_local"],
+                        help="Filter by source type")
     p_list.add_argument("--no-sync", action="store_true", help="Skip auto-sync before listing")
     p_list.set_defaults(func=cmd_list)
 
@@ -607,6 +683,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_show = subparsers.add_parser("show", help="Show a specific conversation")
     p_show.add_argument("cascade_id", help="Cascade UUID, prefix, or numeric DB id")
     p_show.add_argument("--steps", type=int, default=20, help="Max steps to display (default: 20)")
+    p_show.add_argument("--full-tree", dest="full_tree", action="store_true",
+                        help="Show all steps including lateral branches (on_main_chain=0)")
     p_show.add_argument("--no-sync", action="store_true", help="Skip auto-sync before showing")
     p_show.set_defaults(func=cmd_show)
 
@@ -614,6 +692,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_export = subparsers.add_parser("export", help="Export a conversation as structured markdown")
     p_export.add_argument("cascade_id", help="Cascade UUID, prefix, or numeric DB id")
     p_export.add_argument("-o", "--output", default=None, help="Output file path (default: stdout)")
+    p_export.add_argument("--full-tree", dest="full_tree", action="store_true",
+                          help="Export all steps including lateral branches (on_main_chain=0)")
     p_export.add_argument("--no-sync", action="store_true", help="Skip auto-sync before exporting")
     p_export.set_defaults(func=cmd_export)
 

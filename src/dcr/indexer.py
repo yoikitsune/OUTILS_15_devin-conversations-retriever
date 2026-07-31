@@ -96,6 +96,18 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS tool_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    step_id INTEGER,
+    tool_call_id TEXT,
+    tool_name TEXT,
+    arguments_json TEXT,
+    result_step_id INTEGER,
+    result_text TEXT,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
 -- FTS5 virtual tables for full-text search
 CREATE VIRTUAL TABLE IF NOT EXISTS rounds_fts USING fts5(
     prompt,
@@ -118,6 +130,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS checkpoints_fts USING fts5(
     memory_summary,
     conversation_title,
     content='checkpoints',
+    content_rowid='id',
+    tokenize='unicode61'
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS tool_calls_fts USING fts5(
+    arguments_json,
+    result_text,
+    content='tool_calls',
     content_rowid='id',
     tokenize='unicode61'
 );
@@ -166,6 +186,19 @@ CREATE TRIGGER IF NOT EXISTS checkpoints_au AFTER UPDATE ON checkpoints BEGIN
     VALUES (new.id, new.user_intent, new.session_summary, new.code_change_summary, new.memory_summary, new.conversation_title);
 END;
 
+CREATE TRIGGER IF NOT EXISTS tool_calls_ai AFTER INSERT ON tool_calls BEGIN
+    INSERT INTO tool_calls_fts(rowid, arguments_json, result_text) VALUES (new.id, new.arguments_json, new.result_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS tool_calls_ad AFTER DELETE ON tool_calls BEGIN
+    INSERT INTO tool_calls_fts(tool_calls_fts, rowid, arguments_json, result_text) VALUES ('delete', old.id, old.arguments_json, old.result_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS tool_calls_au AFTER UPDATE ON tool_calls BEGIN
+    INSERT INTO tool_calls_fts(tool_calls_fts, rowid, arguments_json, result_text) VALUES ('delete', old.id, old.arguments_json, old.result_text);
+    INSERT INTO tool_calls_fts(rowid, arguments_json, result_text) VALUES (new.id, new.arguments_json, new.result_text);
+END;
+
 -- Index for faster cascade_id lookups
 CREATE INDEX IF NOT EXISTS idx_conversations_cascade_id ON conversations(cascade_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_project_path ON conversations(project_path);
@@ -173,6 +206,8 @@ CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created
 CREATE INDEX IF NOT EXISTS idx_rounds_conversation_id ON rounds(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_steps_conversation_id ON steps(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_checkpoints_conversation_id ON checkpoints(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_conversation_id ON tool_calls(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_call_id ON tool_calls(tool_call_id);
 """
 
 MIGRATION_SQL = [
@@ -334,6 +369,7 @@ class Indexer:
             )
             # Delete old child rows (triggers will clean FTS5 entries)
             self.conn.execute("DELETE FROM rounds WHERE conversation_id = ?", (conv_id,))
+            self.conn.execute("DELETE FROM tool_calls WHERE conversation_id = ?", (conv_id,))
             self.conn.execute("DELETE FROM steps WHERE conversation_id = ?", (conv_id,))
             self.conn.execute("DELETE FROM checkpoints WHERE conversation_id = ?", (conv_id,))
         else:
@@ -378,9 +414,10 @@ class Indexer:
                 (conv_id, rnd.round_number, rnd.prompt, rnd.start_step, rnd.end_step),
             )
 
-        # Insert steps
+        # Insert steps (track rowids for tool_calls join)
+        step_rowids: list[int] = []
         for step in traj.steps:
-            self.conn.execute(
+            cur = self.conn.execute(
                 """INSERT INTO steps
                    (conversation_id, step_index, type, status, variant_field,
                     content_text, timestamp, model,
@@ -405,6 +442,10 @@ class Indexer:
                     step.on_main_chain,
                 ),
             )
+            step_rowids.append(cur.lastrowid)
+
+        # Insert tool_calls (join assistant tool_calls with tool-role results)
+        self._index_tool_calls(conv_id, traj.steps, step_rowids)
 
         # Insert checkpoints
         for cp in traj.checkpoints:
@@ -435,6 +476,57 @@ class Indexer:
 
         self.conn.commit()
         return conv_id
+
+    def _index_tool_calls(
+        self,
+        conv_id: int,
+        steps: list,
+        step_rowids: list[int],
+    ) -> None:
+        """Populate the tool_calls table by joining tool call arrays with results.
+
+        For each assistant step with ``tool_calls_json``, parses the JSON array
+        and inserts one ``tool_calls`` row per call. The result text is looked
+        up from tool-role steps matching on ``tool_call_id``.
+
+        Args:
+            conv_id: The conversation numeric ID.
+            steps: The list of StepInfo objects (parallel to step_rowids).
+            step_rowids: The DB rowids of the inserted steps.
+        """
+        import json as _json
+
+        # Build tool_call_id → (step_rowid, content_text) map from tool-role steps.
+        results: dict[str, tuple[int, str]] = {}
+        for i, step in enumerate(steps):
+            if step.role == "tool" and step.tool_call_id:
+                results[step.tool_call_id] = (step_rowids[i], step.content_text or "")
+
+        for i, step in enumerate(steps):
+            if not step.tool_calls_json:
+                continue
+            try:
+                calls = _json.loads(step.tool_calls_json)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(calls, list):
+                continue
+            for call in calls:
+                if not isinstance(call, dict):
+                    continue
+                tc_id = call.get("id")
+                tool_name = call.get("name") or ""
+                args_json = _json.dumps(call.get("arguments")) if call.get("arguments") is not None else None
+                result_step_id, result_text = (None, None)
+                if tc_id and tc_id in results:
+                    result_step_id, result_text = results[tc_id]
+                self.conn.execute(
+                    """INSERT INTO tool_calls
+                       (conversation_id, step_id, tool_call_id, tool_name,
+                        arguments_json, result_step_id, result_text)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (conv_id, step_rowids[i], tc_id, tool_name, args_json, result_step_id, result_text),
+                )
 
     def index_file(
         self,
@@ -748,10 +840,11 @@ class Indexer:
                 (SELECT COUNT(*) FROM conversations WHERE archived = 1) as archived_count,
                 (SELECT COUNT(*) FROM steps) as step_count,
                 (SELECT COUNT(*) FROM rounds) as round_count,
-                (SELECT COUNT(*) FROM checkpoints) as cp_count"""
+                (SELECT COUNT(*) FROM checkpoints) as cp_count,
+                (SELECT COUNT(*) FROM tool_calls) as tc_count"""
         )
         row = cur.fetchone()
-        conv_count, active_count, archived_count, step_count, round_count, cp_count = row
+        conv_count, active_count, archived_count, step_count, round_count, cp_count, tc_count = row
 
         # Per-source breakdown (ADR-0005).
         sources: dict[str, dict[str, int]] = {}
@@ -783,48 +876,46 @@ class Indexer:
             "step_count": step_count,
             "round_count": round_count,
             "checkpoint_count": cp_count,
+            "tool_call_count": tc_count,
             "db_path": str(self.db_path),
             "db_size": db_size,
             "sources": sources,
         }
 
     def list_conversations(
-        self, limit: int = 50, project: str | None = None
+        self, limit: int = 50, project: str | None = None, source_type: str | None = None
     ) -> list[dict[str, Any]]:
         """List indexed conversations.
 
         Args:
             limit: Maximum number of conversations to return.
             project: If given, filter by project path (exact or prefix match).
+            source_type: If given, filter by source type ("cascade" or "devin_local").
 
         Returns:
             List of dicts with conversation metadata.
         """
+        conditions: list[str] = []
+        params: list[Any] = []
         if project:
-            cur = self.conn.execute(
-                """SELECT id, cascade_id, trajectory_id, title,
-                          step_count, round_count, checkpoint_count,
-                          project_path, git_branch, model, created_at, updated_at,
-                          pb_mtime, indexed_at, archived, archived_at,
-                          source_type, agent_mode, credit_cost, acu_cost
-                   FROM conversations
-                   WHERE project_path = ? OR project_path LIKE ?
-                   ORDER BY created_at DESC
-                   LIMIT ?""",
-                (project, project + "/%", limit),
-            )
-        else:
-            cur = self.conn.execute(
-                """SELECT id, cascade_id, trajectory_id, title,
-                          step_count, round_count, checkpoint_count,
-                          project_path, git_branch, model, created_at, updated_at,
-                          pb_mtime, indexed_at, archived, archived_at,
-                          source_type, agent_mode, credit_cost, acu_cost
-                   FROM conversations
-                   ORDER BY created_at DESC
-                   LIMIT ?""",
-                (limit,),
-            )
+            conditions.append("(project_path = ? OR project_path LIKE ?)")
+            params.extend([project, project + "/%"])
+        if source_type:
+            conditions.append("source_type = ?")
+            params.append(source_type)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        cur = self.conn.execute(
+            f"""SELECT id, cascade_id, trajectory_id, title,
+                      step_count, round_count, checkpoint_count,
+                      project_path, git_branch, model, created_at, updated_at,
+                      pb_mtime, indexed_at, archived, archived_at,
+                      source_type, agent_mode, credit_cost, acu_cost
+               FROM conversations
+               {where}
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            (*params, limit),
+        )
         columns = [d[0] for d in cur.description]
         return [dict(zip(columns, row)) for row in cur.fetchall()]
 
@@ -924,5 +1015,16 @@ class Indexer:
         )
         columns = [d[0] for d in cur.description]
         conv["checkpoints"] = [dict(zip(columns, row)) for row in cur.fetchall()]
+
+        # Tool calls
+        cur = self.conn.execute(
+            """SELECT id, step_id, tool_call_id, tool_name,
+                      arguments_json, result_step_id, result_text
+               FROM tool_calls WHERE conversation_id = ?
+               ORDER BY id""",
+            (conv_id,),
+        )
+        columns = [d[0] for d in cur.description]
+        conv["tool_calls"] = [dict(zip(columns, row)) for row in cur.fetchall()]
 
         return conv
