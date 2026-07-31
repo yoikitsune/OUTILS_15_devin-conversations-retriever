@@ -1,6 +1,6 @@
 # Architecture — Devin Conversations Retriever
 
-> Last updated: 2026-07-31 (ADR-0005: Devin Local support)
+> Last updated: 2026-07-31 (M8 Phase 1A completed — Devin Local integration live)
 
 ## Overview
 
@@ -69,7 +69,7 @@
 - **Algorithm**: AES-256-GCM, key = `safeCodeiumworldKeYsecretBalloon`
 - **File format**: `[nonce 12B][ciphertext][GCM tag 16B]`
 
-### `parser.py` — Protobuf Parsing (enrichment planned — Phase 1B)
+### `parser.py` — Protobuf Parsing (enrichment deferred — Phase 1B)
 
 - **Source**: Adapted from `windsurf-local-user-data-decryption/tools/scan_trajectory.py`
 - **Input**: Decrypted protobuf bytes
@@ -98,9 +98,9 @@
   3. First user prompt truncated to 80 chars
   4. `cascade_id` or `trajectory_id` as last resort
 
-### `devin_local.py` — Devin Local SQLite Reader (planned — ADR-0005)
+### `devin_local.py` — Devin Local SQLite Reader (completed — ADR-0005 Phase 1A)
 
-- **Status**: Planned (M8 / Phase 1A.1)
+- **Status**: Completed (M8 / Phase 1A.1)
 - **Input**: `~/.local/share/devin/cli/sessions.db` (opened in `mode=ro`)
 - **Output**: List of `TrajectoryInfo` (reuses existing dataclasses from `parser.py`)
 - **Schema**: Devin Local uses `refinery` migrations (16 versions, additive). Tables: `sessions`, `message_nodes` (forest with compaction), `tool_call_state` (533 rows), `prompt_history`.
@@ -164,7 +164,7 @@
 ### `server.py` — MCP Server (Rejected)
 
 - **Status**: Rejected — see [ADR-0004](decisions/0004-cli-over-mcp.md)
-- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 114 tests. 0/9 decision criteria favor MCP for this use case.
+- **Rationale**: MCP server imposes permanent token cost (~3-5K tokens/turn) for tools used occasionally. CLI (`dcr`) already complete with 7 subcommands and 177 tests. 0/9 decision criteria favor MCP for this use case.
 - **Integration path**: DCR integrates with Cascade via CLI calls (`run_command`) and optionally via a dedicated skill. No MCP configuration needed.
 
 ## Data Flow

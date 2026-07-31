@@ -283,6 +283,8 @@ def test_cli_sync(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatc
     db = tmp_path / "sync.db"
     import dcr.indexer as indexer_mod
     monkeypatch.setattr(indexer_mod, "DEFAULT_CASCADE_DIR", fake_dir)
+    # Disable Devin Local sync (no real sessions.db in test env).
+    monkeypatch.setattr("dcr.devin_local.DEFAULT_DEVIN_LOCAL_DB", "/nonexistent/dl.db")
 
     ret = main(["--db", str(db), "sync"])
     assert ret == 0

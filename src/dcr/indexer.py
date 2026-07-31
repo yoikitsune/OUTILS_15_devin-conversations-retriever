@@ -39,7 +39,12 @@ CREATE TABLE IF NOT EXISTS conversations (
     pb_size INTEGER DEFAULT 0,
     archived INTEGER DEFAULT 0,
     archived_at TEXT,
-    indexed_at TEXT DEFAULT (datetime('now'))
+    indexed_at TEXT DEFAULT (datetime('now')),
+    -- Devin Local enrichment (ADR-0005). NULL for Cascade.
+    source_type TEXT DEFAULT 'cascade',
+    agent_mode TEXT,
+    credit_cost REAL,
+    acu_cost REAL
 );
 
 CREATE TABLE IF NOT EXISTS rounds (
@@ -62,6 +67,14 @@ CREATE TABLE IF NOT EXISTS steps (
     content_text TEXT,
     timestamp REAL,
     model TEXT,
+    -- Devin Local enrichment (ADR-0005). NULL for Cascade.
+    role TEXT,
+    thinking TEXT,
+    tool_calls_json TEXT,
+    tool_call_id TEXT,
+    node_id INTEGER,
+    parent_node_id INTEGER,
+    on_main_chain INTEGER,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
@@ -166,6 +179,22 @@ MIGRATION_SQL = [
     "ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0",
     "ALTER TABLE conversations ADD COLUMN archived_at TEXT",
     "CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(archived)",
+    # Devin Local enrichment (ADR-0005). Idempotent — OperationalError
+    # (column already exists) is swallowed by init_schema().
+    "ALTER TABLE conversations ADD COLUMN source_type TEXT DEFAULT 'cascade'",
+    "ALTER TABLE conversations ADD COLUMN agent_mode TEXT",
+    "ALTER TABLE conversations ADD COLUMN credit_cost REAL",
+    "ALTER TABLE conversations ADD COLUMN acu_cost REAL",
+    "ALTER TABLE steps ADD COLUMN role TEXT",
+    "ALTER TABLE steps ADD COLUMN thinking TEXT",
+    "ALTER TABLE steps ADD COLUMN tool_calls_json TEXT",
+    "ALTER TABLE steps ADD COLUMN tool_call_id TEXT",
+    "ALTER TABLE steps ADD COLUMN node_id INTEGER",
+    "ALTER TABLE steps ADD COLUMN parent_node_id INTEGER",
+    "ALTER TABLE steps ADD COLUMN on_main_chain INTEGER",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_source_type ON conversations(source_type)",
+    "CREATE INDEX IF NOT EXISTS idx_steps_node_id ON steps(node_id)",
+    "CREATE INDEX IF NOT EXISTS idx_steps_on_main_chain ON steps(on_main_chain)",
 ]
 
 
@@ -278,7 +307,8 @@ class Indexer:
                    step_count = ?, round_count = ?, checkpoint_count = ?,
                    pb_mtime = ?, pb_size = ?,
                    archived = 0, archived_at = NULL,
-                   indexed_at = datetime('now')
+                   indexed_at = datetime('now'),
+                   source_type = ?, agent_mode = ?, credit_cost = ?, acu_cost = ?
                    WHERE id = ?""",
                 (
                     traj.trajectory_id,
@@ -295,6 +325,10 @@ class Indexer:
                     len(traj.checkpoints),
                     pb_mtime,
                     pb_size,
+                    traj.source_type,
+                    traj.agent_mode,
+                    traj.credit_cost,
+                    traj.acu_cost,
                     conv_id,
                 ),
             )
@@ -308,8 +342,9 @@ class Indexer:
                 """INSERT INTO conversations
                    (cascade_id, trajectory_id, title, trajectory_type, source,
                     project_path, git_branch, model, created_at, updated_at,
-                    step_count, round_count, checkpoint_count, pb_mtime, pb_size)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    step_count, round_count, checkpoint_count, pb_mtime, pb_size,
+                    source_type, agent_mode, credit_cost, acu_cost)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     cascade_id,
                     traj.trajectory_id,
@@ -326,6 +361,10 @@ class Indexer:
                     len(traj.checkpoints),
                     pb_mtime,
                     pb_size,
+                    traj.source_type,
+                    traj.agent_mode,
+                    traj.credit_cost,
+                    traj.acu_cost,
                 ),
             )
             conv_id = cur.lastrowid
@@ -344,8 +383,10 @@ class Indexer:
             self.conn.execute(
                 """INSERT INTO steps
                    (conversation_id, step_index, type, status, variant_field,
-                    content_text, timestamp, model)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    content_text, timestamp, model,
+                    role, thinking, tool_calls_json, tool_call_id,
+                    node_id, parent_node_id, on_main_chain)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     conv_id,
                     step.index,
@@ -355,6 +396,13 @@ class Indexer:
                     step.content_text,
                     step.timestamp,
                     step.model,
+                    step.role,
+                    step.thinking,
+                    step.tool_calls_json,
+                    step.tool_call_id,
+                    step.node_id,
+                    step.parent_node_id,
+                    step.on_main_chain,
                 ),
             )
 
@@ -475,18 +523,48 @@ class Indexer:
         self,
         cascade_dir: Path | None = None,
         remove_stale: bool = False,
+        devin_local_db: Path | str | None = None,
     ) -> dict[str, Any]:
-        """Synchronize the database with the cascade directory.
+        """Synchronize the database with both Cascade and Devin Local sources.
 
-        Scans for new/modified .pb files and indexes them.
-        Conversations whose .pb file no longer exists are marked as
-        archived (archived=1) but are NEVER deleted from the database.
+        Scans for new/modified ``.pb`` files (Cascade) and new/modified
+        sessions in ``sessions.db`` (Devin Local), indexing them.
+        Conversations whose source file/row no longer exists are marked as
+        archived (``archived=1``) but are NEVER deleted from the database.
+
+        Missing sources are skipped silently (e.g. Cascade disabled).
 
         Args:
-            cascade_dir: Directory containing .pb files.
-                If None, uses DEFAULT_CASCADE_DIR.
+            cascade_dir: Directory containing ``.pb`` files.
+                If None, uses ``DEFAULT_CASCADE_DIR``.
             remove_stale: Deprecated, ignored. Kept for backward compatibility.
                 Stale conversations are always archived, never deleted.
+            devin_local_db: Path to the Devin Local ``sessions.db``.
+                If None, uses ``DEFAULT_DEVIN_LOCAL_DB``.
+
+        Returns:
+            Dict with top-level keys (new, updated, unchanged, archived,
+            failed, errors) aggregating both sources, plus a ``sources`` key
+            with per-source breakdowns (``cascade``, ``devin_local``).
+        """
+        self.init_schema()
+
+        cascade_res = self._sync_cascade(cascade_dir)
+        devin_res = self._sync_devin_local(devin_local_db)
+
+        # Aggregate top-level counts.
+        agg: dict[str, Any] = {
+            k: cascade_res[k] + devin_res[k]
+            for k in ("new", "updated", "unchanged", "archived", "failed")
+        }
+        agg["errors"] = cascade_res["errors"] + devin_res["errors"]
+        agg["sources"] = {"cascade": cascade_res, "devin_local": devin_res}
+        # Backward-compat: expose devin_local counts at top level too.
+        agg["devin_local"] = devin_res
+        return agg
+
+    def _sync_cascade(self, cascade_dir: Path | None = None) -> dict[str, Any]:
+        """Sync Cascade ``.pb`` files. See :meth:`sync` for the public API.
 
         Returns:
             Dict with keys: new, updated, unchanged, archived, failed, errors.
@@ -497,13 +575,18 @@ class Indexer:
         if cascade_dir is None:
             cascade_dir = DEFAULT_CASCADE_DIR
 
-        self.init_schema()
+        empty = {"new": 0, "updated": 0, "unchanged": 0, "archived": 0,
+                 "failed": 0, "errors": []}
+        if not cascade_dir.exists():
+            return empty
 
         # Scan .pb files on disk
         pb_files = {p.stem: p for p in cascade_dir.glob("*.pb")}
 
-        # Get all indexed cascade_ids
-        cur = self.conn.execute("SELECT cascade_id FROM conversations")
+        # Get indexed Cascade cascade_ids only (don't touch Devin Local rows)
+        cur = self.conn.execute(
+            "SELECT cascade_id FROM conversations WHERE source_type = 'cascade'"
+        )
         indexed_ids = {row[0] for row in cur.fetchall()}
 
         new = 0
@@ -537,17 +620,109 @@ class Indexer:
                 failed += 1
                 errors.append(f"{pb_path.name}: {exc}")
 
-        # Archive conversations whose .pb file no longer exists (never delete)
+        # Archive Cascade conversations whose .pb file no longer exists
         stale_ids = indexed_ids - set(pb_files.keys())
         for cascade_id in stale_ids:
-            self.conn.execute(
+            cur = self.conn.execute(
                 "UPDATE conversations SET archived = 1, archived_at = datetime('now') "
-                "WHERE cascade_id = ? AND archived = 0",
+                "WHERE cascade_id = ? AND source_type = 'cascade' AND archived = 0",
                 (cascade_id,),
             )
-            archived += 1
+            archived += cur.rowcount
         if archived > 0:
             self.conn.commit()
+
+        return {
+            "new": new,
+            "updated": updated,
+            "unchanged": unchanged,
+            "archived": archived,
+            "failed": failed,
+            "errors": errors,
+        }
+
+    def _sync_devin_local(self, db_path: Path | str | None = None) -> dict[str, Any]:
+        """Sync Devin Local sessions from ``sessions.db``.
+
+        Incremental on ``sessions.last_activity_at``: a session is re-indexed
+        when its ``last_activity_at`` is newer than the indexed ``updated_at``.
+        Sessions absent from ``sessions.db`` are archived (never deleted).
+
+        The source DB is opened read-only (``mode=ro``).
+
+        Returns:
+            Dict with keys: new, updated, unchanged, archived, failed, errors.
+        """
+        from dcr.devin_local import DEFAULT_DEVIN_LOCAL_DB, DevinLocalReader
+
+        if db_path is None:
+            db_path = DEFAULT_DEVIN_LOCAL_DB
+
+        self.init_schema()
+
+        empty = {"new": 0, "updated": 0, "unchanged": 0, "archived": 0,
+                 "failed": 0, "errors": []}
+        if not Path(db_path).exists():
+            return empty
+
+        new = 0
+        updated = 0
+        unchanged = 0
+        archived = 0
+        failed = 0
+        errors: list[str] = []
+
+        # Map indexed Devin Local session id → updated_at for incremental check.
+        cur = self.conn.execute(
+            "SELECT cascade_id, updated_at FROM conversations "
+            "WHERE source_type = 'devin_local'"
+        )
+        indexed: dict[str, float] = {row[0]: row[1] for row in cur.fetchall()}
+
+        try:
+            reader = DevinLocalReader(db_path)
+            reader.check_schema()
+            sessions = reader.list_sessions()
+        except Exception as exc:
+            return {"new": 0, "updated": 0, "unchanged": 0, "archived": 0,
+                    "failed": 0, "errors": [f"devin_local: {exc}"]}
+
+        try:
+            seen_ids: set[str] = set()
+            for s in sessions:
+                sid = s["id"]
+                seen_ids.add(sid)
+                last_activity = float(s["last_activity_at"]) if s["last_activity_at"] else 0.0
+                prev = indexed.get(sid)
+                if prev is not None and last_activity <= (prev or 0):
+                    unchanged += 1
+                    continue
+                try:
+                    traj = reader.read_session(sid)
+                    if traj is None:
+                        continue
+                    self.index_trajectory(traj, cascade_id=sid)
+                    if prev is not None:
+                        updated += 1
+                    else:
+                        new += 1
+                except Exception as exc:
+                    failed += 1
+                    errors.append(f"devin_local:{sid}: {exc}")
+
+            # Archive Devin Local sessions no longer in sessions.db
+            stale_ids = set(indexed.keys()) - seen_ids
+            for sid in stale_ids:
+                cur = self.conn.execute(
+                    "UPDATE conversations SET archived = 1, archived_at = datetime('now') "
+                    "WHERE cascade_id = ? AND source_type = 'devin_local' AND archived = 0",
+                    (sid,),
+                )
+                archived += cur.rowcount
+            if archived > 0:
+                self.conn.commit()
+        finally:
+            reader.close()
 
         return {
             "new": new,
@@ -563,7 +738,8 @@ class Indexer:
 
         Returns:
             Dict with conversation_count, step_count, round_count,
-            checkpoint_count, db_path, db_size.
+            checkpoint_count, db_path, db_size, plus per-source breakdowns
+            under the ``sources`` key (``cascade``, ``devin_local``).
         """
         cur = self.conn.execute(
             """SELECT
@@ -577,6 +753,27 @@ class Indexer:
         row = cur.fetchone()
         conv_count, active_count, archived_count, step_count, round_count, cp_count = row
 
+        # Per-source breakdown (ADR-0005).
+        sources: dict[str, dict[str, int]] = {}
+        for src in ("cascade", "devin_local"):
+            cur = self.conn.execute(
+                """SELECT
+                    (SELECT COUNT(*) FROM conversations WHERE source_type = ?) as convs,
+                    (SELECT COUNT(*) FROM conversations WHERE source_type = ? AND archived = 0) as active,
+                    (SELECT COUNT(*) FROM steps s JOIN conversations c ON s.conversation_id = c.id
+                       WHERE c.source_type = ?) as steps,
+                    (SELECT COUNT(*) FROM checkpoints cp JOIN conversations c ON cp.conversation_id = c.id
+                       WHERE c.source_type = ?) as cps""",
+                (src, src, src, src),
+            )
+            sc, sa, ss, scp = cur.fetchone()
+            sources[src] = {
+                "conversation_count": sc,
+                "active_count": sa,
+                "step_count": ss,
+                "checkpoint_count": scp,
+            }
+
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
 
         return {
@@ -588,6 +785,7 @@ class Indexer:
             "checkpoint_count": cp_count,
             "db_path": str(self.db_path),
             "db_size": db_size,
+            "sources": sources,
         }
 
     def list_conversations(
@@ -607,7 +805,8 @@ class Indexer:
                 """SELECT id, cascade_id, trajectory_id, title,
                           step_count, round_count, checkpoint_count,
                           project_path, git_branch, model, created_at, updated_at,
-                          pb_mtime, indexed_at, archived, archived_at
+                          pb_mtime, indexed_at, archived, archived_at,
+                          source_type, agent_mode, credit_cost, acu_cost
                    FROM conversations
                    WHERE project_path = ? OR project_path LIKE ?
                    ORDER BY created_at DESC
@@ -619,7 +818,8 @@ class Indexer:
                 """SELECT id, cascade_id, trajectory_id, title,
                           step_count, round_count, checkpoint_count,
                           project_path, git_branch, model, created_at, updated_at,
-                          pb_mtime, indexed_at, archived, archived_at
+                          pb_mtime, indexed_at, archived, archived_at,
+                          source_type, agent_mode, credit_cost, acu_cost
                    FROM conversations
                    ORDER BY created_at DESC
                    LIMIT ?""",
@@ -682,7 +882,8 @@ class Indexer:
                       trajectory_type, source, project_path, git_branch, model,
                       created_at, updated_at, step_count, round_count,
                       checkpoint_count, pb_mtime, indexed_at,
-                      archived, archived_at
+                      archived, archived_at,
+                      source_type, agent_mode, credit_cost, acu_cost
                FROM conversations WHERE id = ?""",
             (conv_id,),
         )
@@ -702,7 +903,9 @@ class Indexer:
         # Steps
         cur = self.conn.execute(
             """SELECT id, step_index, type, status, variant_field,
-                      content_text, timestamp, model
+                      content_text, timestamp, model,
+                      role, thinking, tool_calls_json, tool_call_id,
+                      node_id, parent_node_id, on_main_chain
                FROM steps WHERE conversation_id = ?
                ORDER BY step_index""",
             (conv_id,),

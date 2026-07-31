@@ -78,7 +78,7 @@ def _strip_ansi(text: str) -> str:
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
-    """Sync database with cascade .pb files."""
+    """Sync database with Cascade .pb files and Devin Local sessions.db."""
     idx = Indexer(db_path=args.db_path)
     result = idx.sync()
     idx.close()
@@ -88,6 +88,18 @@ def cmd_sync(args: argparse.Namespace) -> int:
     print(f"  Updated:   {result['updated']}")
     print(f"  Unchanged: {result['unchanged']}")
     print(f"  Archived:  {result['archived']}")
+    # Per-source breakdown (ADR-0005).
+    sources = result.get("sources") or {}
+    if sources:
+        parts = []
+        for src in ("cascade", "devin_local"):
+            s = sources.get(src, {})
+            n = s.get("new", 0)
+            u = s.get("updated", 0)
+            if n or u:
+                parts.append(f"{src}: +{n} new, {u} updated")
+        if parts:
+            print(f"  Sources:   {'; '.join(parts)}")
     if result["failed"]:
         print(f"  Failed:    {result['failed']}")
         for err in result["errors"][:10]:
@@ -154,8 +166,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         return 0
 
     # Table header
-    print(f"{'ID':>3}  {'Created':12s}  {'Updated':12s}  {'Project':30s}  {'Branch':25s}  {'Model':15s}  Title")
-    print("-" * 130)
+    print(f"{'ID':>3}  {'Src':4s}  {'Created':12s}  {'Updated':12s}  {'Project':30s}  {'Branch':25s}  {'Model':15s}  Title")
+    print("-" * 136)
 
     for c in convs:
         project = _truncate(c["project_path"].replace("/home/julien/Sources/", "~/Sources/") if c["project_path"] else "—", 30)
@@ -164,7 +176,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         title = _truncate(c["title"] or "—", 40)
         created = _fmt_ts(c["created_at"])
         updated = _fmt_ts(c["updated_at"])
-        print(f"{c['id']:3d}  {created:12s}  {updated:12s}  {project:30s}  {branch:25s}  {model:15s}  {title}")
+        src = (c.get("source_type") or "cascade")[:4]
+        print(f"{c['id']:3d}  {src:4s}  {created:12s}  {updated:12s}  {project:30s}  {branch:25s}  {model:15s}  {title}")
 
     print(f"\nTotal: {len(convs)} conversation(s)")
     return 0
@@ -184,8 +197,20 @@ def cmd_show(args: argparse.Namespace) -> int:
         return 1
 
     # Header
+    src = conv.get("source_type") or "cascade"
     print(f"Conversation: {conv['title']}")
-    print(f"  Cascade ID:  {conv['cascade_id']}")
+    print(f"  ID:          {conv['cascade_id']}  (source: {src})")
+    if src == "devin_local":
+        mode = conv.get("agent_mode") or "—"
+        credit = conv.get("credit_cost")
+        acu = conv.get("acu_cost")
+        costs = []
+        if credit is not None:
+            costs.append(f"credit={credit}")
+        if acu is not None:
+            costs.append(f"acu={acu}")
+        cost_str = f"  | costs: {', '.join(costs)}" if costs else ""
+        print(f"  Agent mode:  {mode}{cost_str}")
     print(f"  Project:     {conv['project_path'] or '—'}")
     print(f"  Branch:      {conv['git_branch'] or '—'}")
     print(f"  Model:       {conv['model'] or '—'}")
@@ -213,7 +238,13 @@ def cmd_show(args: argparse.Namespace) -> int:
             text = _truncate(s["content_text"] or "(empty)", 70)
             ts = _fmt_ts(s["timestamp"]) if s.get("timestamp") else ""
             model = s.get("model") or ""
-            print(f"  #{s['step_index']:3d}  v={s['variant_field'] or '?':>3}  {ts:12s}  {model:10s}  {text}")
+            role = s.get("role") or ""
+            role_tag = f" [{role}]" if role else ""
+            on_main = s.get("on_main_chain")
+            branch_tag = "" if on_main is None else ("  " if on_main else "  ~")
+            vf = s["variant_field"]
+            vf_str = "?" if vf is None else str(vf)
+            print(f"  #{s['step_index']:3d}  v={vf_str:>3}  {ts:12s}  {model:10s}  {text}{role_tag}{branch_tag}")
         if len(conv["steps"]) > max_show:
             print(f"  ... and {len(conv['steps']) - max_show} more steps")
         print()
@@ -248,9 +279,17 @@ def cmd_export(args: argparse.Namespace) -> int:
         lines.append(text)
 
     # Header
+    src = conv.get("source_type") or "cascade"
     _add(f"# {conv['title'] or conv['cascade_id']}")
     _add()
-    _add(f"- **Cascade ID**: `{conv['cascade_id']}`")
+    _add(f"- **ID**: `{conv['cascade_id']}` (source: {src})")
+    if src == "devin_local":
+        mode = conv.get("agent_mode") or "—"
+        _add(f"- **Agent mode**: {mode}")
+        credit = conv.get("credit_cost")
+        acu = conv.get("acu_cost")
+        if credit is not None or acu is not None:
+            _add(f"- **Costs**: credit={credit}, acu={acu}")
     _add(f"- **Project**: {conv['project_path'] or '—'}")
     _add(f"- **Branch**: {conv['git_branch'] or '—'}")
     _add(f"- **Model**: {conv['model'] or '—'}")
@@ -395,6 +434,14 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"Steps:         {status['step_count']}")
     print(f"Rounds:        {status['round_count']}")
     print(f"Checkpoints:   {status['checkpoint_count']}")
+    # Per-source breakdown (ADR-0005).
+    sources = status.get("sources") or {}
+    for src in ("cascade", "devin_local"):
+        s = sources.get(src)
+        if not s:
+            continue
+        print(f"  {src:12s}: {s['conversation_count']} convs ({s['active_count']} active), "
+              f"{s['step_count']} steps, {s['checkpoint_count']} checkpoints")
     return 0
 
 
@@ -520,7 +567,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
     parser = argparse.ArgumentParser(
         prog="dcr",
-        description="Devin Conversations Retriever — search Windsurf Cascade conversations",
+        description="Devin Conversations Retriever — search Cascade & Devin Local conversations",
     )
     parser.add_argument(
         "--db",
@@ -532,7 +579,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # sync
-    p_sync = subparsers.add_parser("sync", help="Sync database with cascade .pb files")
+    p_sync = subparsers.add_parser("sync", help="Sync database with Cascade .pb files and Devin Local sessions.db")
     p_sync.set_defaults(func=cmd_sync)
 
     # search

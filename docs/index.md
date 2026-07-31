@@ -1,6 +1,6 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-31 (ADR-0005: Devin Local support)
+> Last updated: 2026-07-31 (M8 Phase 1A completed — Devin Local integration live)
 
 ## Project
 
@@ -26,8 +26,8 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 |---|---|---|
 | [`/src/dcr/decrypt.py`](../src/dcr/decrypt.py) | AES-256-GCM decryption of `.pb` files | Completed (M2) |
 | [`/src/dcr/parser.py`](../src/dcr/parser.py) | Protobuf wire-format parsing (enrichment: thinking, tool_calls — Phase 1B, deferred) | Completed (M3) — enrichment deferred (M8 Phase 1B) |
-| [`/src/dcr/devin_local.py`](../src/dcr/devin_local.py) | Devin Local SQLite reader (`sessions.db` → `TrajectoryInfo`, full-tree, `chat_message` JSON) | Planned (M8 / Phase 1A) |
-| [`/src/dcr/indexer.py`](../src/dcr/indexer.py) | SQLite + FTS5 indexing with sync() (both sources, full-tree for Devin Local) | Completed (M4) — Devin Local sync planned (M8 Phase 1A) |
+| [`/src/dcr/devin_local.py`](../src/dcr/devin_local.py) | Devin Local SQLite reader (`sessions.db` → `TrajectoryInfo`, full-tree, `chat_message` JSON) | Completed (M8 Phase 1A) |
+| [`/src/dcr/indexer.py`](../src/dcr/indexer.py) | SQLite + FTS5 indexing with sync() (both sources, full-tree for Devin Local) | Completed (M4 + M8 Phase 1A) |
 | [`/src/dcr/search.py`](../src/dcr/search.py) | FTS5 search engine with filters and auto-sync | Completed (M5) |
 | [`/src/dcr/cli.py`](../src/dcr/cli.py) | CLI interface (`dcr`) with 7 subcommands | Completed (M6) |
 | [`/src/dcr/server.py`](../src/dcr/server.py) | MCP server (FastMCP) | Rejected (M7) — see [ADR-0004](decisions/0004-cli-over-mcp.md) |
@@ -45,7 +45,7 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 ## Verification
 
 ```bash
-# Run all tests (124 tests)
+# Run all tests (177 tests)
 .venv/bin/pytest tests/ -v
 
 # CLI usage

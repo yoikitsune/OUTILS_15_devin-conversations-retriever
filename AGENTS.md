@@ -40,7 +40,7 @@ python3 -m venv .venv
 │   └── dcr/               # Main package
 │       ├── __init__.py
 │       ├── server.py      # MCP server (rejected — see ADR-0004)
-│       ├── devin_local.py # Devin Local SQLite reader (planned — see ADR-0005)
+│       ├── devin_local.py # Devin Local SQLite reader (sessions.db → TrajectoryInfo)
 │       ├── decrypt.py     # .pb decryption module
 │       ├── parser.py      # Protobuf parsing (CortexTrajectory)
 │       ├── indexer.py     # SQLite + FTS5 indexing

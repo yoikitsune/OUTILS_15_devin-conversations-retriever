@@ -273,6 +273,8 @@ def test_auto_sync_enabled(tmp_path: Path, monkeypatch):
 
     import dcr.indexer as indexer_mod
     monkeypatch.setattr(indexer_mod, "DEFAULT_CASCADE_DIR", fake_dir)
+    # Disable Devin Local sync (no real sessions.db in test env).
+    monkeypatch.setattr("dcr.devin_local.DEFAULT_DEVIN_LOCAL_DB", Path("/nonexistent/dl.db"))
 
     results = engine.search("auto sync")
     assert results.sync_info is not None

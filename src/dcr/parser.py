@@ -124,7 +124,14 @@ def iter_fields(
 
 @dataclass
 class StepInfo:
-    """A single step in a trajectory."""
+    """A single step in a trajectory.
+
+    Cascade-specific fields (type, status, variant_field, variant_data) are
+    populated by the protobuf parser. Devin Local-specific fields (role,
+    thinking, tool_calls_json, tool_call_id, node_id, parent_node_id,
+    on_main_chain) are populated by the Devin Local reader. Either set is
+    None/empty when not applicable — see ADR-0005.
+    """
 
     index: int
     type: int | None = None
@@ -134,6 +141,14 @@ class StepInfo:
     content_text: str = ""
     timestamp: float | None = None
     model: str = ""
+    # Devin Local enrichment (ADR-0005). NULL/empty for Cascade.
+    role: str | None = None
+    thinking: str | None = None
+    tool_calls_json: str | None = None
+    tool_call_id: str | None = None
+    node_id: int | None = None
+    parent_node_id: int | None = None
+    on_main_chain: int | None = None
 
 
 @dataclass
@@ -167,7 +182,13 @@ class RoundInfo:
 
 @dataclass
 class TrajectoryInfo:
-    """Parsed CortexTrajectory."""
+    """Parsed CortexTrajectory.
+
+    Unified container for both Cascade (.pb) and Devin Local (sessions.db)
+    conversations. `source_type` discriminates the origin ('cascade' or
+    'devin_local'); Devin Local-specific fields (agent_mode, credit_cost,
+    acu_cost) are None for Cascade. See ADR-0005.
+    """
 
     trajectory_id: str = ""
     cascade_id: str = ""
@@ -179,6 +200,18 @@ class TrajectoryInfo:
     steps: list[StepInfo] = field(default_factory=list)
     checkpoints: list[CheckpointInfo] = field(default_factory=list)
     rounds: list[RoundInfo] = field(default_factory=list)
+    # Devin Local enrichment (ADR-0005). NULL/empty for Cascade.
+    source_type: str = "cascade"
+    agent_mode: str | None = None
+    credit_cost: float | None = None
+    acu_cost: float | None = None
+    # Explicit overrides for derived properties. When not None, they take
+    # precedence over the step-derived values. Used by Devin Local, which
+    # has authoritative session-level timestamps/title in `sessions.db`.
+    # Cascade leaves these None, so the property derivation is unchanged.
+    created_at_override: float | None = None
+    updated_at_override: float | None = None
+    title_override: str | None = None
 
     @property
     def step_count(self) -> int:
@@ -190,7 +223,13 @@ class TrajectoryInfo:
 
     @property
     def created_at(self) -> float | None:
-        """Timestamp of the first step (Unix epoch seconds)."""
+        """Timestamp of the first step (Unix epoch seconds).
+
+        Returns the explicit override (Devin Local session-level timestamp)
+        if set, otherwise derives from the first step with a timestamp.
+        """
+        if self.created_at_override is not None:
+            return self.created_at_override
         for s in self.steps:
             if s.timestamp is not None:
                 return s.timestamp
@@ -198,7 +237,13 @@ class TrajectoryInfo:
 
     @property
     def updated_at(self) -> float | None:
-        """Timestamp of the last step (Unix epoch seconds)."""
+        """Timestamp of the last step (Unix epoch seconds).
+
+        Returns the explicit override (Devin Local session-level timestamp)
+        if set, otherwise derives from the last step with a timestamp.
+        """
+        if self.updated_at_override is not None:
+            return self.updated_at_override
         for s in reversed(self.steps):
             if s.timestamp is not None:
                 return s.timestamp
@@ -209,11 +254,16 @@ class TrajectoryInfo:
         """Best available title for this conversation.
 
         Priority:
+        0. Explicit override (Devin Local `sessions.title`)
         1. conversation_title from any checkpoint (field 10)
         2. First line of user_intent from the first checkpoint
         3. First user prompt (truncated to 80 chars)
         4. cascade_id or trajectory_id
         """
+        # 0. Explicit override (Devin Local)
+        if self.title_override:
+            return self.title_override
+
         # 1. conversation_title from checkpoints
         for cp in self.checkpoints:
             if cp.conversation_title:

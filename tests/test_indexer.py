@@ -16,6 +16,10 @@ from dcr.parser import (
 )
 from dcr.decrypt import KEY, NONCE_SIZE, decrypt_bytes
 
+# Sentinel path that never exists — passed to sync() to disable Devin Local
+# sync in Cascade-only tests (ADR-0005 dual-source sync).
+NO_DEVIN_LOCAL = Path("/nonexistent/devin-local-sessions.db")
+
 
 # --- Fixtures ---
 
@@ -549,7 +553,7 @@ def fake_cascade_dir(tmp_path: Path) -> Path:
 
 def test_sync_new_files(indexer: Indexer, fake_cascade_dir: Path):
     """sync() indexes all new .pb files."""
-    result = indexer.sync(fake_cascade_dir)
+    result = indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert result["new"] == 2
     assert result["updated"] == 0
     assert result["unchanged"] == 0
@@ -561,8 +565,8 @@ def test_sync_new_files(indexer: Indexer, fake_cascade_dir: Path):
 
 def test_sync_unchanged(indexer: Indexer, fake_cascade_dir: Path):
     """sync() skips unchanged files on second run."""
-    indexer.sync(fake_cascade_dir)
-    result = indexer.sync(fake_cascade_dir)
+    indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
+    result = indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert result["new"] == 0
     assert result["updated"] == 0
     assert result["unchanged"] == 2
@@ -571,11 +575,11 @@ def test_sync_unchanged(indexer: Indexer, fake_cascade_dir: Path):
 
 def test_sync_detects_modified(indexer: Indexer, fake_cascade_dir: Path):
     """sync() re-indexes modified files (mtime change)."""
-    indexer.sync(fake_cascade_dir)
+    indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     pb = fake_cascade_dir / "conv-aaa.pb"
     new_data = _make_trajectory_pb("conv-aaa", prompt="Updated prompt", title="Updated Title")
     pb.write_bytes(new_data)
-    result = indexer.sync(fake_cascade_dir)
+    result = indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert result["updated"] == 1
     assert result["unchanged"] == 1
     conv = indexer.get_conversation("conv-aaa")
@@ -584,10 +588,10 @@ def test_sync_detects_modified(indexer: Indexer, fake_cascade_dir: Path):
 
 def test_sync_archives_stale(indexer: Indexer, fake_cascade_dir: Path):
     """sync() archives conversations whose .pb file was deleted (never deletes)."""
-    indexer.sync(fake_cascade_dir)
+    indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert indexer.get_status()["conversation_count"] == 2
     (fake_cascade_dir / "conv-aaa.pb").unlink()
-    result = indexer.sync(fake_cascade_dir)
+    result = indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert result["archived"] == 1
     assert result["unchanged"] == 1
     # Conversation is still in the database, marked as archived
@@ -603,10 +607,10 @@ def test_sync_archives_stale(indexer: Indexer, fake_cascade_dir: Path):
 
 def test_sync_archives_stale_regardless_of_remove_stale_flag(indexer: Indexer, fake_cascade_dir: Path):
     """sync() always archives stale conversations, remove_stale flag is deprecated."""
-    indexer.sync(fake_cascade_dir)
+    indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     (fake_cascade_dir / "conv-aaa.pb").unlink()
     # Even with remove_stale=False, conversations are archived (never deleted)
-    result = indexer.sync(fake_cascade_dir, remove_stale=False)
+    result = indexer.sync(fake_cascade_dir, remove_stale=False, devin_local_db=NO_DEVIN_LOCAL)
     assert result["archived"] == 1
     assert indexer.get_status()["conversation_count"] == 2
     assert indexer.get_status()["archived_count"] == 1
@@ -614,10 +618,10 @@ def test_sync_archives_stale_regardless_of_remove_stale_flag(indexer: Indexer, f
 
 def test_sync_detects_new_file(indexer: Indexer, fake_cascade_dir: Path):
     """sync() detects a new .pb file added between runs."""
-    indexer.sync(fake_cascade_dir)
+    indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     pb_data = _make_trajectory_pb("conv-ccc", prompt="New question", title="New Chat")
     (fake_cascade_dir / "conv-ccc.pb").write_bytes(pb_data)
-    result = indexer.sync(fake_cascade_dir)
+    result = indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert result["new"] == 1
     assert result["unchanged"] == 2
     assert indexer.get_status()["conversation_count"] == 3
@@ -632,6 +636,8 @@ def test_sync_default_dir(indexer: Indexer, tmp_path: Path, monkeypatch):
 
     import dcr.indexer as indexer_mod
     monkeypatch.setattr(indexer_mod, "DEFAULT_CASCADE_DIR", fake_dir)
+    # Disable Devin Local sync (no real sessions.db in test env).
+    monkeypatch.setattr("dcr.devin_local.DEFAULT_DEVIN_LOCAL_DB", NO_DEVIN_LOCAL)
 
     result = indexer.sync()
     assert result["new"] == 1
@@ -645,11 +651,11 @@ def test_sync_real_data(real_pb_dir: Path | None, tmp_path: Path):
         pytest.skip("No .pb files available")
 
     idx = Indexer(db_path=tmp_path / "real.db")
-    result = idx.sync(real_pb_dir)
+    result = idx.sync(real_pb_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert result["failed"] == 0, f"Errors: {result['errors']}"
     assert result["new"] > 0
 
-    result2 = idx.sync(real_pb_dir)
+    result2 = idx.sync(real_pb_dir, devin_local_db=NO_DEVIN_LOCAL)
     assert result2["new"] == 0
     assert result2["updated"] == 0
     assert result2["unchanged"] == result["new"]
@@ -660,10 +666,10 @@ def test_archived_conversation_still_searchable(indexer: Indexer, fake_cascade_d
     """An archived conversation remains in the database and is still searchable."""
     from dcr.search import SearchEngine
 
-    indexer.sync(fake_cascade_dir)
+    indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
     # Archive one conversation by removing its .pb file and syncing
     (fake_cascade_dir / "conv-aaa.pb").unlink()
-    indexer.sync(fake_cascade_dir)
+    indexer.sync(fake_cascade_dir, devin_local_db=NO_DEVIN_LOCAL)
 
     # The archived conversation should still be findable via get_conversation
     conv = indexer.get_conversation("conv-aaa")
