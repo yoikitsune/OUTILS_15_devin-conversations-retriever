@@ -27,6 +27,21 @@ Permettre à Cascade de **retrouver et injecter du contexte** depuis l'archive p
 
 ## Procédure
 
+### Étape 0 : Vérifier que `dcr` est disponible
+
+Ce skill pilote le CLI `dcr`. Il est censé être installé globalement via `./scripts/install-skills.sh` du repo `devin-conversations-retriever` (un wrapper est créé dans `~/.local/bin/dcr`). Vérifier avant la première commande :
+
+```bash
+command -v dcr >/dev/null 2>&1 && echo OK || echo MISSING
+```
+
+- **Si OK** → continuer avec les commandes `dcr ...` ci-dessous.
+- **Si MISSING** → utiliser le fallback à chemin absolu :
+  ```bash
+  /home/julien/Sources/devin-conversations-retriever/.venv/bin/dcr <command>
+  ```
+- **Si le fallback n'existe pas non plus** → demander à l'utilisateur de lancer `./scripts/install-skills.sh` depuis le repo `devin-conversations-retriever`. **Ne jamais lancer `find /` pour localiser le binaire** — c'est lent, bruyant, et le binaire ne peut être qu'à `~/.local/bin/dcr` ou dans le venv du repo. Si ces deux emplacements ne le contiennent pas, demander à l'utilisateur.
+
 ### Étape 1 : Identifier la requête
 
 Quand l'utilisateur écrit `@conversation: <sujet>` ou demande de retrouver une conversation :

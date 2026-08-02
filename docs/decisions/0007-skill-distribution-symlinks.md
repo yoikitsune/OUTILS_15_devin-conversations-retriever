@@ -229,6 +229,72 @@ Should follow the same pattern:
 - Do not write to a shared global Rule
 - Uninstall = remove symlinks (one command)
 
+---
+
+## Amendment 2026-08-02: Skill + CLI companion distribution
+
+> Supersedes bullet 1 of the Primary decision ("Skills are the unit of distribution") and the empirical validation claim in Consequences ("Empirically validated via `devin skills list` from `/tmp`").
+
+### Bug discovered
+
+The original ADR scoped the unit of distribution as **the skill alone**. This is correct for skills that are pure procedures (markdown only). It is **incorrect** for skills that wrap an external CLI: a skill that documents `dcr search ...` is useless if `dcr` is not on PATH.
+
+This bug was caught by conversation `marked-cotton` (2026-08-02): from a non-DCR project (`cascade-self-config`), the `dcr-conversation` skill was correctly invoked (proving the symlink works), but the skill's documented command `dcr search ...` failed with `bash: dcr: commande introuvable`. The model then attempted `find / -name "dcr"` — a full filesystem scan — to locate the binary. The user interrupted.
+
+Root cause: the skill was **discoverable everywhere but functional nowhere outside the DCR repo**. The CLI `dcr` lives only at `repo/.venv/bin/dcr` (not on PATH). The original empirical validation (`devin skills list` from `/tmp`) only checked **discovery**, not **end-to-end functionality**.
+
+### Corrected decision
+
+**The unit of distribution is the skill + its CLI companion.** When a skill wraps a CLI, the install script must expose both globally:
+
+1. **Skill** → symlink in `~/.codeium/windsurf/skills/<name>/` (unchanged).
+2. **CLI companion** → wrapper script in `~/.local/bin/<binary>` that `exec`s the repo's venv binary. The wrapper resolves its own symlink to find the real binary, so it stays valid regardless of where `~/.local/bin/<binary>` is invoked from.
+
+The wrapper (not `pipx install`) is used because `pipx` copies the project into an isolated venv, which **breaks live edits** — a core requirement of this ADR (bullet 4: "git pull is the update mechanism"). The wrapper pattern preserves the repo as the single source of truth.
+
+### Why not embed the CLI in the skill's `scripts/`
+
+The agentskills.io spec defines an optional `scripts/` directory for executable code shipped with the skill. This is the right pattern for **self-contained scripts** (bash, autonomous Python). It does not fit `dcr`: the CLI is a Python package with non-trivial dependencies (`cryptography`, `protobuf`, FTS5). Embedding it in `scripts/` would require either vendoring the deps or re-implementing the venv setup inside the skill — both worse than the wrapper approach. The spec's `scripts/` convention is cited here for completeness, not as the chosen mechanism.
+
+### Evidence
+
+- **[enact/link-enact.sh](https://github.com/EnactProtocol/enact/blob/main/scripts/link-enact.sh)**: build CLI → create wrapper script → symlink into `~/.local/bin/`. Wrapper resolves its own symlink to find the real script, then `exec`s it. Live edits preserved, uninstall = `rm` the symlink. This is exactly our pattern, adapted from Node/bun to Python.
+- **[AdebayoBraimah/install-local-skills](https://github.com/adebayobraimah/install-local-skills)**: `install-skills.sh` runs in **multiple phases** — agent skills, MCP servers, **pip packages via `uv pip install`**, Claude plugins. Coupling "install skills" with "install companion CLI/packages" in the same script is an established pattern, not a hack.
+- **[skillsmith](https://github.com/Songmu/skillsmith)**: a Go CLI that **embeds its skills** via `embed.FS` and exposes `mytool skills install`. The inverse of our pattern (CLI ships skills, vs. skill ships CLI), but the same principle: **skill and its executable are co-distributed as one unit**. Splitting them creates a broken state.
+- **[pipx](https://pipx.pypa.io/latest/explanation/how-pipx-works/)**: the canonical Python pattern for global CLI install (`pipx install /path/to/project` → isolated venv + symlink in `~/.local/bin`). **Rejected here** because pipx copies the project into an isolated venv, breaking live edits. Cited as the reference for the `~/.local/bin` target convention.
+
+### Corrected empirical validation
+
+The original validation (`devin skills list` from `/tmp`) only proves **discovery**. The corrected validation must prove **end-to-end functionality**:
+
+```bash
+cd /tmp
+devin skills list | grep dcr-conversation          # discovery (unchanged)
+~/.local/bin/dcr search "test"                     # CLI companion is on PATH
+dcr search "test"                                  # CLI is on PATH (no absolute path needed)
+```
+
+All three must pass from a directory that is **not** the DCR repo. If the third fails, the install is incomplete — the skill is discoverable but not functional.
+
+### SKILL.md fallback
+
+The `dcr-conversation` SKILL.md must document the absolute path to the binary as a fallback, in case the wrapper is missing (e.g., user ran `install-skills.sh` before the wrapper phase was added). The fallback is:
+
+```bash
+/home/julien/Sources/devin-conversations-retriever/.venv/bin/dcr <command>
+```
+
+Additionally, the SKILL.md must include an explicit rule: **never run `find /` to locate a binary**. If `dcr` is not on PATH and the absolute fallback is missing, ask the user to re-run `./scripts/install-skills.sh`. A full filesystem scan is never the right answer.
+
+### Updated install script contract
+
+`scripts/install-skills.sh` and `scripts/install-skills.ps1` now have two phases:
+
+1. **Skills phase** — symlink each skill in `SKILLS[]` into `~/.codeium/windsurf/skills/` (unchanged).
+2. **CLI phase** — for each entry in `CLI_BINARIES[]` (name + path to repo venv binary), create a wrapper script in `~/.local/bin/<name>` that `exec`s the venv binary. Idempotent: re-running replaces the wrapper if the target path changed.
+
+`--remove` removes both skill symlinks and CLI wrappers. `--list` shows both. The config array `CLI_BINARIES[]` is empty for tooling projects that ship pure-procedure skills (e.g., `cascade-self-config`); it is populated only when a skill wraps a CLI.
+
 ## Sources
 
 | # | Source | URL | Key point |
@@ -246,3 +312,8 @@ Should follow the same pattern:
 | 11 | Claude Code — skills | https://code.claude.com/docs/en/skills | Skills carry their own awareness via description. Global skills at `~/.claude/skills/`. |
 | 12 | Cursor — rules | https://cursor.com/docs/rules.md | Global "Rules for AI" = single personal baseline. No per-project registry in global. |
 | 13 | AgentPatterns — distributed AGENTS.md | https://agentpatterns.ai/instructions/agents-md-distributed-conventions/ | Global agent config = multi-repo context (where repos live), not per-tool awareness. |
+| 14 | EnactProtocol — link-enact.sh | https://github.com/EnactProtocol/enact/blob/main/scripts/link-enact.sh | Wrapper script + symlink in `~/.local/bin`. Wrapper resolves its own symlink, `exec`s the real binary. Live edits preserved. |
+| 15 | AdebayoBraimah — install-local-skills | https://github.com/adebayobraimah/install-local-skills | Multi-phase `install-skills.sh`: skills + MCP servers + pip packages. Coupling skill install with companion CLI install is established. |
+| 16 | Songmu — skillsmith | https://github.com/Songmu/skillsmith | Go CLI embeds its skills via `embed.FS`, exposes `mytool skills install`. Skill + executable co-distributed as one unit. |
+| 17 | pipx — how it works | https://pipx.pypa.io/latest/explanation/how-pipx-works/ | Canonical Python pattern: isolated venv + symlink in `~/.local/bin`. Rejected here (breaks live edits), cited for the `~/.local/bin` target convention. |
+| 18 | agentskills.io — specification | https://agentskills.io/specification | Skill structure: `SKILL.md` + optional `scripts/`. `scripts/` is for self-contained executable code, not for wrapping external CLIs with deps. |

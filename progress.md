@@ -1,10 +1,12 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-08-02 (ADR-0007 — skill distribution via symlinks, global rule removed)
+> Last updated: 2026-08-02 (ADR-0007 amendment — skill + CLI companion distribution)
 
-## Current Phase: Post-M8 — Skill Distribution (ADR-0007)
+## Current Phase: Post-M8 — Skill Distribution (ADR-0007 + amendment)
 
 M2–M6 complete. M7 (MCP server) rejected (ADR-0004). M8 complete (all phases). **ADR-0007** (2026-08-02): skill distribution via symlinks — `scripts/install-skills.sh` (Linux/macOS) and `scripts/install-skills.ps1` (Windows junctions) created, `dcr-conversation` skill globally installed via symlink, `global_rules.md` deleted (project-specific awareness replaced by skill tier-1 description), ID confusion warning added to `dcr show/export --help`. 35 CLI tests passing.
+
+**ADR-0007 amendment** (2026-08-02, same day): bug caught by conversation `marked-cotton` — the skill was discoverable globally but the `dcr` CLI was not on PATH outside the DCR repo, causing a `find /` panic from the model. Amendment extends the unit of distribution from "skill alone" to "skill + CLI companion". `install-skills.sh`/`.ps1` now have a second phase that creates a wrapper script in `~/.local/bin/dcr` (Linux/macOS) or `~/.local/bin/dcr.cmd` (Windows) that `exec`s the repo's venv binary — live edits preserved, `pipx` rejected (breaks live edits). SKILL.md updated with Étape 0 (verify `dcr` on PATH, fallback to absolute path, explicit "never `find /`" rule). End-to-end validated: `dcr search "test"` from `/tmp` works.
 
 ## Milestones
 
@@ -81,10 +83,15 @@ M2–M6 complete. M7 (MCP server) rejected (ADR-0004). M8 complete (all phases).
 - [x] ADR-0007: `global_rules.md` deleted (project-specific awareness replaced by skill tier-1 description)
 - [x] ADR-0007: ID confusion warning added to `dcr show --help` and `dcr export --help` (epilog)
 - [x] ADR-0007: ADR-0004 "discovery layer = global Rule" superseded by "discovery layer = skill description tier-1"
+- [x] ADR-0007 amendment: unit of distribution extended from "skill alone" to "skill + CLI companion" (bug caught by conversation `marked-cotton`)
+- [x] ADR-0007 amendment: `install-skills.sh` second phase — wrapper `~/.local/bin/dcr` that `exec`s the repo venv binary (live edits preserved, `pipx` rejected)
+- [x] ADR-0007 amendment: `install-skills.ps1` second phase — wrapper `~/.local/bin/dcr.cmd` (Windows)
+- [x] ADR-0007 amendment: `dcr-conversation/SKILL.md` Étape 0 — verify `dcr` on PATH, fallback to absolute path, explicit "never `find /`" rule
+- [x] ADR-0007 amendment: end-to-end validation extended — `dcr search "test"` from `/tmp` (not just `devin skills list`)
 
 ## What's In Progress
 
-Nothing currently in progress. M8 complete. ADR-0007 (skill distribution) applied and tested. 35 CLI tests passing.
+Nothing currently in progress. M8 complete. ADR-0007 + amendment applied and tested. 35 CLI tests passing.
 
 ## What's Blocked
 
