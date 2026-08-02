@@ -1,10 +1,10 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-07-31 (M8 Phase 4 completed — @conversation skill, 220 tests passing)
+> Last updated: 2026-08-02 (ADR-0007 — skill distribution via symlinks, global rule removed)
 
-## Current Phase: M8 Phase 4 Completed — @conversation Skill
+## Current Phase: Post-M8 — Skill Distribution (ADR-0007)
 
-M2–M6 complete. M7 (MCP server) rejected (ADR-0004). **M8 Phase 1A** (Devin Local MVP), **Phase 2** (enrichment), **Phase 3** (schema resilience), **Phase 4** (`@conversation` skill) all completed. Phase 4: `.devin/skills/dcr-conversation/SKILL.md` (procédure de retrieval + injection de contexte, 4 étapes, exemples), `global_rules.md` mis à jour (référence au skill + filtres Phase 2), `tests/test_skill_conversation.py` (12 tests de cohérence documentation). **M8 est complet** — toutes les phases prévues sont done (1B annulée). 220 tests total.
+M2–M6 complete. M7 (MCP server) rejected (ADR-0004). M8 complete (all phases). **ADR-0007** (2026-08-02): skill distribution via symlinks — `scripts/install-skills.sh` (Linux/macOS) and `scripts/install-skills.ps1` (Windows junctions) created, `dcr-conversation` skill globally installed via symlink, `global_rules.md` deleted (project-specific awareness replaced by skill tier-1 description), ID confusion warning added to `dcr show/export --help`. 35 CLI tests passing.
 
 ## Milestones
 
@@ -76,14 +76,23 @@ M2–M6 complete. M7 (MCP server) rejected (ADR-0004). **M8 Phase 1A** (Devin Lo
 - [x] M6 fix: `dcr list -p/--project` filter (exact + prefix match on project_path)
 - [x] M6 fix: `dcr show/export` accept numeric DB id (resolves to cascade_id internally)
 - [x] M6 fix: `Indexer.list_conversations(project=)` and `Indexer.get_conversation_by_db_id()` added
+- [x] ADR-0007: `scripts/install-skills.sh` (Linux/macOS symlinks) + `scripts/install-skills.ps1` (Windows junctions)
+- [x] ADR-0007: `dcr-conversation` skill globally installed via symlink at `~/.codeium/windsurf/skills/dcr-conversation/`
+- [x] ADR-0007: `global_rules.md` deleted (project-specific awareness replaced by skill tier-1 description)
+- [x] ADR-0007: ID confusion warning added to `dcr show --help` and `dcr export --help` (epilog)
+- [x] ADR-0007: ADR-0004 "discovery layer = global Rule" superseded by "discovery layer = skill description tier-1"
 
 ## What's In Progress
 
-Nothing currently in progress. **M8 is complete** — all planned phases done (1A, 2, 3, 4; 1B cancelled). 220 tests passing.
+Nothing currently in progress. M8 complete. ADR-0007 (skill distribution) applied and tested. 35 CLI tests passing.
 
 ## What's Blocked
 
 Nothing currently blocked.
+
+## TODO (out of session)
+
+- [ ] **Windows empirical test** (ADR-0007): run `scripts/install-skills.ps1` on a Windows machine and verify `devin skills list` detects the skill through the junction (`mklink /J`). Devin's junction support is not officially documented but expected (Node.js `fs.realpath` follows junctions).
 
 ## M8 — Devin Local Integration (planned)
 

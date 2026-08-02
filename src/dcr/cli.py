@@ -696,7 +696,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.set_defaults(func=cmd_list)
 
     # show
-    p_show = subparsers.add_parser("show", help="Show a specific conversation")
+    p_show = subparsers.add_parser(
+        "show",
+        help="Show a specific conversation",
+        epilog="Note: numeric dcr IDs (e.g. 145) are for dcr only. "
+               "trajectory_search expects a Cascade UUID (e.g. 586311a4-...), not a numeric id.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p_show.add_argument("cascade_id", help="Cascade UUID, prefix, or numeric DB id")
     p_show.add_argument("--steps", type=int, default=20, help="Max steps to display (default: 20)")
     p_show.add_argument("--full-tree", dest="full_tree", action="store_true",
@@ -705,7 +711,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.set_defaults(func=cmd_show)
 
     # export
-    p_export = subparsers.add_parser("export", help="Export a conversation as structured markdown")
+    p_export = subparsers.add_parser(
+        "export",
+        help="Export a conversation as structured markdown",
+        epilog="Note: numeric dcr IDs (e.g. 145) are for dcr only. "
+               "trajectory_search expects a Cascade UUID (e.g. 586311a4-...), not a numeric id.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p_export.add_argument("cascade_id", help="Cascade UUID, prefix, or numeric DB id")
     p_export.add_argument("-o", "--output", default=None, help="Output file path (default: stdout)")
     p_export.add_argument("--full-tree", dest="full_tree", action="store_true",

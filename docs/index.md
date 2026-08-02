@@ -1,6 +1,6 @@
 # docs/index.md — Source-of-Truth Router
 
-> Last updated: 2026-07-31 (M8 complete — all phases done, 220 tests, @conversation skill)
+> Last updated: 2026-08-02 (ADR-0007 — skill distribution via symlinks, global rule removed)
 
 ## Project
 
@@ -31,7 +31,9 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 | [`/src/dcr/search.py`](../src/dcr/search.py) | FTS5 search engine with filters and auto-sync | Completed (M5) |
 | [`/src/dcr/cli.py`](../src/dcr/cli.py) | CLI interface (`dcr`) with 7 subcommands | Completed (M6) |
 | [`/src/dcr/server.py`](../src/dcr/server.py) | MCP server (FastMCP) | Rejected (M7) — see [ADR-0004](decisions/0004-cli-over-mcp.md) |
-| [`/.devin/skills/dcr-conversation/SKILL.md`](../.devin/skills/dcr-conversation/SKILL.md) | `@conversation` skill — retrieve & inject past conversation context | Completed (M8 Phase 4) |
+| [`/.devin/skills/dcr-conversation/SKILL.md`](../.devin/skills/dcr-conversation/SKILL.md) | `@conversation` skill — retrieve & inject past conversation context | Completed (M8 Phase 4) — globally distributed via symlink (ADR-0007) |
+| [`/scripts/install-skills.sh`](../scripts/install-skills.sh) | Skill installation script (Linux/macOS, symlinks) | Completed (ADR-0007) |
+| [`/scripts/install-skills.ps1`](../scripts/install-skills.ps1) | Skill installation script (Windows, junctions) | Completed (ADR-0007) |
 
 ## Decision Records
 
@@ -43,6 +45,7 @@ Windsurf/Devin Desktop stores conversation histories locally. Cascade uses encry
 | [ADR-0004](decisions/0004-cli-over-mcp.md) | CLI + Skill over MCP server | Accepted |
 | [ADR-0005](decisions/0005-unified-schema-devin-local.md) | Unified schema for Devin Local + Cascade | Accepted |
 | [ADR-0006](decisions/0006-devin-local-schema-compat.md) | Devin Local schema compatibility strategy | Accepted |
+| [ADR-0007](decisions/0007-skill-distribution-symlinks.md) | Skill distribution via symlinks (global rule removal) | Accepted |
 
 ## Verification
 
