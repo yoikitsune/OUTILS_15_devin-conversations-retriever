@@ -38,19 +38,19 @@ Quand l'utilisateur écrit `@conversation: <sujet>` ou demande de retrouver une 
 
 ```bash
 # Recherche simple par mots-clés
-dcr search "mots-clés extraits" --no-sync
+dcr search "mots-clés extraits"
 
 # Recherche filtrée par projet
-dcr search "mots-clés" -p /home/julien/Sources/mon-projet --no-sync
+dcr search "mots-clés" -p /home/julien/Sources/mon-projet
 
 # Recherche filtrée par source (cascade ou devin_local)
-dcr search "mots-clés" --source-type devin_local --no-sync
+dcr search "mots-clés" --source-type devin_local
 
 # Recherche dans une table spéciale (tool_calls, checkpoints, rounds)
-dcr search "file_path" -s tool_calls --no-sync
+dcr search "file_path" -s tool_calls
 ```
 
-**Important** : Toujours utiliser `--no-sync` pour éviter un sync complet (qui peut prendre 30-60s). L'auto-sync se fera naturellement si l'utilisateur lance d'autres commandes `dcr` sans `--no-sync`.
+**Note** : l'auto-sync avant chaque commande est quasi instantané (<1s en pratique avec les sources `devin_local` SQLite incrementales). Ne pas utiliser `--no-sync` sauf cas très particulier — la fraîcheur de l'archive prime sur le gain de temps négligeable.
 
 ### Étape 3 : Récupérer le détail
 
@@ -58,16 +58,16 @@ Une fois la conversation identifiée (par son ID numérique dans la liste de ré
 
 ```bash
 # Aperçu rapide (main chain only, 20 steps)
-dcr show <ID> --no-sync
+dcr show <ID>
 
 # Aperçu avec branches latérales (regenerations, prompts édités)
-dcr show <ID> --no-sync --full-tree --steps 50
+dcr show <ID> --full-tree --steps 50
 
 # Export complet en markdown (thinking + tool_calls + checkpoints)
-dcr export <ID> --no-sync
+dcr export <ID>
 
 # Export avec branches
-dcr export <ID> --no-sync --full-tree
+dcr export <ID> --full-tree
 ```
 
 ### Étape 4 : Injecter le contexte
@@ -125,7 +125,7 @@ Selon la demande de l'utilisateur :
 ### Exemple 1 : "Qu'est-ce que j'ai dit sur les ADR ?"
 
 ```bash
-dcr search "ADR architecture decision" --no-sync
+dcr search "ADR architecture decision"
 ```
 
 → Injecter les 3-5 meilleurs résultats avec snippets.
@@ -133,9 +133,9 @@ dcr search "ADR architecture decision" --no-sync
 ### Exemple 2 : "@conversation: validation phase projet"
 
 ```bash
-dcr search "validation phase projet" --no-sync
+dcr search "validation phase projet"
 # → trouve ID 313
-dcr show 313 --no-sync --steps 10
+dcr show 313 --steps 10
 ```
 
 → Injecter l'aperçu de la conversation 313.
@@ -143,7 +143,7 @@ dcr show 313 --no-sync --steps 10
 ### Exemple 3 : "Retrouve la conversation où j'ai utilisé l'outil read sur le fichier progress.md"
 
 ```bash
-dcr search "progress.md" -s tool_calls --no-sync
+dcr search "progress.md" -s tool_calls
 ```
 
 → Cherche dans les arguments des tool_calls.
@@ -151,7 +151,7 @@ dcr search "progress.md" -s tool_calls --no-sync
 ### Exemple 4 : "Montre-moi toutes mes conversations sur le projet devin-conversations-retriever"
 
 ```bash
-dcr list -p /home/julien/Sources/devin-conversations-retriever --no-sync -l 20
+dcr list -p /home/julien/Sources/devin-conversations-retriever -l 20
 ```
 
 → Liste les 20 conversations les plus récentes sur ce projet.

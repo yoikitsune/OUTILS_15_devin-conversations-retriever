@@ -103,11 +103,14 @@ def test_skill_mentions_full_tree():
 
 
 def test_skill_mentions_no_sync():
-    """The skill mentions --no-sync (important for performance)."""
+    """The skill explains the --no-sync trade-off (sync is fast, prefer freshness)."""
     if not SKILL_PATH.exists():
         pytest.skip("Skill file not found")
     content = SKILL_PATH.read_text(encoding="utf-8")
-    assert "--no-sync" in content, "Skill should mention --no-sync to avoid slow syncs"
+    assert "--no-sync" in content, "Skill should mention --no-sync flag"
+    assert "fraîcheur" in content.lower() or "fraicheur" in content.lower(), (
+        "Skill should explain that sync is fast and freshness matters more than --no-sync"
+    )
 
 
 def test_skill_has_procedure_section():
