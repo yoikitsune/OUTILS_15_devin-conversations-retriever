@@ -5,8 +5,8 @@
 #   .\scripts\install-skills.ps1 -Remove      # remove junctions and wrappers
 #   .\scripts\install-skills.ps1 -List         # list managed junctions and wrappers
 #
-# Two phases (per ADR-0007 amendment 2026-08-02):
-#   1. Skills  — junction .devin\skills\<name> into %USERPROFILE%\.codeium\windsurf\skills\
+# Two phases (per ADR-0007, amended by ADR-0008 2026-08-03):
+#   1. Skills  — junction .devin\skills\<name> into %APPDATA%\devin\skills\
 #   2. CLI     — create wrapper .cmd in %USERPROFILE%\.local\bin\<name> that execs the
 #                repo's venv binary. Live edits preserved (repo is canonical).
 #
@@ -16,6 +16,9 @@
 # Junctions (mklink /J) are used instead of symbolic links (mklink /D)
 # because junctions do not require Developer Mode or admin privileges on
 # Windows. Both are followed by Node.js fs.realpath, which Devin uses.
+#
+# Legacy cleanup: this script also checks for and removes stale installations
+# from the Cascade-era path %USERPROFILE%\.codeium\windsurf\skills\ (per ADR-0008).
 
 param(
   [switch]$Remove,
@@ -24,7 +27,7 @@ param(
 
 # --- Config ---------------------------------------------------------------
 
-# Skills to expose globally (directory names under .devin/skills/).
+# Skills to expose globally (directory names under .devin\skills\).
 $Skills = @(
   "dcr-conversation"
 )
@@ -36,8 +39,13 @@ $CliBinaries = @(
   "dcr:.venv\Scripts\dcr.exe"
 )
 
-# Global skills directory (Windsurf channel — read by Devin via import).
-$GlobalSkillsDir = Join-Path $env:USERPROFILE ".codeium\windsurf\skills"
+# Global skills directory (XDG-convention Devin path on Windows — per ADR-0008).
+$GlobalSkillsDir = Join-Path $env:APPDATA "devin\skills"
+
+# Legacy skills directories (Cascade-era paths — cleaned up during install).
+$LegacySkillsDirs = @(
+  (Join-Path $env:USERPROFILE ".codeium\windsurf\skills")
+)
 
 # Global bin directory for CLI wrappers (standard user PATH location).
 $GlobalBinDir = Join-Path $env:USERPROFILE ".local\bin"
@@ -78,6 +86,25 @@ function Link-Skill {
   Write-Host "  LINK $Name  $dst -> $src"
 }
 
+function Cleanup-Legacy-Skill {
+  param([string]$Name)
+  foreach ($legacyDir in $LegacySkillsDirs) {
+    $legacyDst = Join-Path $legacyDir $Name
+    if (Test-Path $legacyDst -PathType Container) {
+      $item = Get-Item $legacyDst -Force
+      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        cmd /c rmdir "$legacyDst" | Out-Null
+        Write-Host "  CLEANUP legacy $legacyDst (removed stale junction)"
+      } elseif ((Get-ChildItem $legacyDst -Force -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0) {
+        Remove-Item $legacyDst -Force
+        Write-Host "  CLEANUP legacy $legacyDst (removed empty dir)"
+      } else {
+        Write-Host "  SKIP legacy $legacyDst — non-empty dir, not a junction (remove manually if stale)" -ForegroundColor Yellow
+      }
+    }
+  }
+}
+
 function Unlink-Skill {
   param([string]$Name)
   $dst = Join-Path $GlobalSkillsDir $Name
@@ -93,6 +120,9 @@ function Unlink-Skill {
   } else {
     Write-Host "  SKIP $Name — no junction at $dst"
   }
+
+  # Also clean up legacy paths on -Remove.
+  Cleanup-Legacy-Skill $Name
 }
 
 function List-Skill {
@@ -109,6 +139,19 @@ function List-Skill {
     }
   } else {
     Write-Host "  $Name  (not installed)"
+  }
+
+  # Show legacy installations if they exist.
+  foreach ($legacyDir in $LegacySkillsDirs) {
+    $legacyDst = Join-Path $legacyDir $Name
+    if (Test-Path $legacyDst -PathType Container) {
+      $item = Get-Item $legacyDst -Force
+      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        Write-Host "  $Name  -> $($item.Target)  (LEGACY at $legacyDir)"
+      } elseif ((Get-ChildItem $legacyDst -Force -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+        Write-Host "  $Name  (LEGACY dir at $legacyDst — non-empty, not a junction)"
+      }
+    }
   }
 }
 
@@ -201,6 +244,8 @@ if ($Remove) {
   }
 } else {
   Write-Host "Installing skills globally:"
+  # Clean up legacy installations before installing at the new path.
+  foreach ($skill in $Skills) { Cleanup-Legacy-Skill $skill }
   foreach ($skill in $Skills) { Link-Skill $skill }
   if ($CliBinaries.Count -gt 0) {
     Write-Host "Installing CLI companions:"

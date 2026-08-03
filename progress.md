@@ -1,12 +1,14 @@
 # progress.md — Living Status Board
 
-> Last updated: 2026-08-02 (ADR-0007 amendment — skill + CLI companion distribution)
+> Last updated: 2026-08-03 (ADR-0008 — migration to XDG-convention skill paths)
 
-## Current Phase: Post-M8 — Skill Distribution (ADR-0007 + amendment)
+## Current Phase: Post-M8 — Skill Distribution (ADR-0007 + ADR-0008)
 
 M2–M6 complete. M7 (MCP server) rejected (ADR-0004). M8 complete (all phases). **ADR-0007** (2026-08-02): skill distribution via symlinks — `scripts/install-skills.sh` (Linux/macOS) and `scripts/install-skills.ps1` (Windows junctions) created, `dcr-conversation` skill globally installed via symlink, `global_rules.md` deleted (project-specific awareness replaced by skill tier-1 description), ID confusion warning added to `dcr show/export --help`. 35 CLI tests passing.
 
 **ADR-0007 amendment** (2026-08-02, same day): bug caught by conversation `marked-cotton` — the skill was discoverable globally but the `dcr` CLI was not on PATH outside the DCR repo, causing a `find /` panic from the model. Amendment extends the unit of distribution from "skill alone" to "skill + CLI companion". `install-skills.sh`/`.ps1` now have a second phase that creates a wrapper script in `~/.local/bin/dcr` (Linux/macOS) or `~/.local/bin/dcr.cmd` (Windows) that `exec`s the repo's venv binary — live edits preserved, `pipx` rejected (breaks live edits). SKILL.md updated with Étape 0 (verify `dcr` on PATH, fallback to absolute path, explicit "never `find /`" rule). End-to-end validated: `dcr search "test"` from `/tmp` works.
+
+**ADR-0008** (2026-08-03): migration to XDG-convention skill paths — `~/.codeium/windsurf/skills/` (Cascade-era legacy) → `~/.config/devin/skills/` (Linux/macOS) / `%APPDATA%\devin\skills\` (Windows). Scripts updated with `cleanup_legacy_skill` / `Cleanup-Legacy-Skill` for automatic removal of stale installations at the old path. Aligns DCR with `devin-self-config` (which migrated via its ADR-0002). CLI wrapper at `~/.local/bin/dcr` unaffected.
 
 ## Milestones
 

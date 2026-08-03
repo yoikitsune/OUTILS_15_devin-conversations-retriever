@@ -6,8 +6,8 @@
 #   ./scripts/install-skills.sh --remove # remove symlinks and wrappers
 #   ./scripts/install-skills.sh --list   # list managed symlinks and wrappers
 #
-# Two phases (per ADR-0007 amendment 2026-08-02):
-#   1. Skills  — symlink .devin/skills/<name> into ~/.codeium/windsurf/skills/
+# Two phases (per ADR-0007, amended by ADR-0008 2026-08-03):
+#   1. Skills  — symlink .devin/skills/<name> into ~/.config/devin/skills/
 #   2. CLI     — create wrapper script in ~/.local/bin/<name> that execs the
 #                repo's venv binary. Live edits preserved (repo is canonical).
 #
@@ -18,6 +18,9 @@
 #
 # Cross-platform: on Windows, run via Git Bash or WSL. For native PowerShell,
 # use scripts/install-skills.ps1 (uses junctions, no admin required).
+#
+# Legacy cleanup: this script also checks for and removes stale installations
+# from the Cascade-era path ~/.codeium/windsurf/skills/ (per ADR-0008).
 
 set -euo pipefail
 
@@ -35,8 +38,13 @@ CLI_BINARIES=(
   "dcr:.venv/bin/dcr"
 )
 
-# Global skills directory (Windsurf channel — read by Devin via import).
-GLOBAL_SKILLS_DIR="${HOME}/.codeium/windsurf/skills"
+# Global skills directory (XDG-convention Devin path — per ADR-0008).
+GLOBAL_SKILLS_DIR="${HOME}/.config/devin/skills"
+
+# Legacy skills directories (Cascade-era paths — cleaned up during install).
+LEGACY_SKILLS_DIRS=(
+  "${HOME}/.codeium/windsurf/skills"
+)
 
 # Global bin directory for CLI wrappers (standard user PATH location).
 GLOBAL_BIN_DIR="${HOME}/.local/bin"
@@ -74,6 +82,24 @@ link_skill() {
   echo "  LINK ${name}  ${dst} -> ${src}"
 }
 
+cleanup_legacy_skill() {
+  local name="$1"
+  for legacy_dir in "${LEGACY_SKILLS_DIRS[@]}"; do
+    local legacy_dst="${legacy_dir}/${name}"
+    if [[ -L "${legacy_dst}" ]]; then
+      rm "${legacy_dst}"
+      echo "  CLEANUP legacy ${legacy_dst} (removed stale symlink)"
+    elif [[ -d "${legacy_dst}" ]]; then
+      if [[ -z "$(ls -A "${legacy_dst}" 2>/dev/null)" ]]; then
+        rmdir "${legacy_dst}"
+        echo "  CLEANUP legacy ${legacy_dst} (removed empty dir)"
+      else
+        echo "  SKIP legacy ${legacy_dst} — non-empty dir, not a symlink (remove manually if stale)" >&2
+      fi
+    fi
+  done
+}
+
 unlink_skill() {
   local name="$1"
   local dst="${GLOBAL_SKILLS_DIR}/${name}"
@@ -84,6 +110,9 @@ unlink_skill() {
   else
     echo "  SKIP ${name} — no symlink at ${dst}"
   fi
+
+  # Also clean up legacy paths on --remove.
+  cleanup_legacy_skill "${name}"
 }
 
 list_skill() {
@@ -95,6 +124,16 @@ list_skill() {
   else
     echo "  ${name}  (not installed)"
   fi
+
+  # Show legacy installations if they exist.
+  for legacy_dir in "${LEGACY_SKILLS_DIRS[@]}"; do
+    local legacy_dst="${legacy_dir}/${name}"
+    if [[ -L "${legacy_dst}" ]]; then
+      echo "  ${name}  -> $(readlink "${legacy_dst}")  (LEGACY at ${legacy_dir})"
+    elif [[ -d "${legacy_dst}" && -n "$(ls -A "${legacy_dst}" 2>/dev/null)" ]]; then
+      echo "  ${name}  (LEGACY dir at ${legacy_dst} — non-empty, not a symlink)"
+    fi
+  done
 }
 
 # link_cli <name> <repo-relative-path-to-binary>
@@ -178,6 +217,10 @@ mkdir -p "${GLOBAL_SKILLS_DIR}" "${GLOBAL_BIN_DIR}"
 case "${1:-install}" in
   install|"")
     echo "Installing skills globally:"
+    # Clean up legacy installations before installing at the new path.
+    for skill in "${SKILLS[@]}"; do
+      cleanup_legacy_skill "${skill}" || true
+    done
     for skill in "${SKILLS[@]}"; do
       link_skill "${skill}" || true
     done
